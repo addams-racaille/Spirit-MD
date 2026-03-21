@@ -97,8 +97,11 @@ module.exports = async (sock, msg, messageCache) => {
         }
     }
 
-    // Traitement des commandes (préfixe dynamique depuis la DB)
-    const currentPrefix = await db.getVar('BOT_PREFIX', config.PREFIX);
+    // Traitement des commandes (préfixe dynamique par instance depuis la DB)
+    // Priorité : clef spécifique à la session > clef globale > config.PREFIX
+    const sessionPrefixKey = `BOT_PREFIX_${sessionId}`;
+    const sessionSpecificPrefix = await db.getVar(sessionPrefixKey, null);
+    const currentPrefix = sessionSpecificPrefix ?? await db.getVar('BOT_PREFIX', config.PREFIX);
     if (body && body.startsWith(currentPrefix)) {
         const args = body.slice(currentPrefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
@@ -146,7 +149,8 @@ module.exports = async (sock, msg, messageCache) => {
 
                 const ctx = {
                     sock, msg, commandName, q, args, from, messageCache,
-                    isOwner, isMasterAdmin, currentMode, reply, editMsg, pushName, sessionId
+                    isOwner, isMasterAdmin, currentMode, reply, editMsg, pushName, sessionId,
+                    currentPrefix
                 };
 
                 await cmd.execute(ctx);

@@ -17,17 +17,26 @@ module.exports = async (sock, msg) => {
 
         let targetJid = msg.key.remoteJid;
         if (antiVvStatus === 'sudo') {
-            targetJid = sock.customOwner ? `${sock.customOwner}@s.whatsapp.net` : `${config.OWNER_NUMBER}@s.whatsapp.net`;
+            targetJid = sock.customOwner
+                ? `${sock.customOwner}@s.whatsapp.net`
+                : `${config.OWNER_NUMBER}@s.whatsapp.net`;
         } else if (antiVvStatus === 'custom') {
             const customJid = await db.getVar('ANTI_VV_JID', '');
             if (customJid) targetJid = customJid;
         }
 
         const viewOnceContent = isViewOnce.message;
-        const mediaType = Object.keys(viewOnceContent)[0];
+        const mediaType = Object.keys(viewOnceContent)[0]; // imageMessage | videoMessage | audioMessage
+
+        // On construit un faux message qui pointe directement sur le contenu
+        // media, sinon downloadMediaMessage ne trouve pas le bon fichier.
+        const fakeMsg = {
+            key: msg.key,
+            message: viewOnceContent
+        };
 
         const buffer = await downloadMediaMessage(
-            msg,
+            fakeMsg,
             'buffer',
             {},
             { 

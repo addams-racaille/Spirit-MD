@@ -360,22 +360,23 @@ module.exports = [
         usage: '.setprefix <nouveauPréfixe>',
         adminOnly: true,
         execute: async (ctx) => {
-            const { q, reply } = ctx;
+            const { q, reply, sessionId, currentPrefix } = ctx;
             const newPrefix = q.trim();
             if (!newPrefix || newPrefix.length > 3) {
-                const current = await db.getVar('BOT_PREFIX', '.');
                 return await reply(
                     `_*Changement de Préfixe*_\n` +
-                    `_Préfixe actuel : \`${current}\`_\n\n` +
+                    `_Préfixe actuel de cette instance : \`${currentPrefix}\`_\n\n` +
                     `_Utilisation :_\n` +
-                    `\`.setprefix !\` → utiliser !\n` +
-                    `\`.setprefix /\` → utiliser /\n` +
-                    `\`.setprefix $\` → utiliser $\n\n` +
+                    `\`${currentPrefix}setprefix !\` → utiliser !\n` +
+                    `\`${currentPrefix}setprefix /\` → utiliser /\n` +
+                    `\`${currentPrefix}setprefix $\` → utiliser $\n\n` +
                     `_⚠️ Le préfixe doit faire 1 à 3 caractères max._`
                 );
             }
-            await db.setVar('BOT_PREFIX', newPrefix);
-            await reply(`_✅ Préfixe changé en : *${newPrefix}*_\n_Utilisation immédiate : \`${newPrefix}help\`_`);
+            // Sauvegarde avec clef unique par instance (BOT_PREFIX_<sessionId>)
+            const sessionPrefixKey = `BOT_PREFIX_${sessionId}`;
+            await db.setVar(sessionPrefixKey, newPrefix);
+            await reply(`_✅ Préfixe de cette instance changé en : *${newPrefix}*_\n_Utilisation immédiate : \`${newPrefix}help\`_`);
         }
     },
     {

@@ -312,18 +312,19 @@ module.exports = [
         name: 'menu',
         aliases: ['help'],
         desc: 'Affiche la liste complète des commandes ou l\'aide détaillée d\'une commande.',
-        usage: '.help [commande]',
+        usage: '<prefix>help [commande]',
         execute: async (ctx) => {
             const target = ctx.q.toLowerCase().trim();
             const { commands } = require('../handlers/commandHandler');
+            const p = ctx.currentPrefix || '.';
 
             if (target) {
                 const cmd = commands.get(target);
                 if (!cmd) return await ctx.reply(`_❌ Commande inconnue : ${target}_`);
-                let msg = `📘 *AIDE COMMANDE* : \`.${cmd.name}\`\n\n`;
-                if (cmd.aliases && cmd.aliases.length > 0) msg += `🔗 *Alias* : ${cmd.aliases.map(a=>`.${a}`).join(', ')}\n`;
+                let msg = `📘 *AIDE COMMANDE* : \`${p}${cmd.name}\`\n\n`;
+                if (cmd.aliases && cmd.aliases.length > 0) msg += `🔗 *Alias* : ${cmd.aliases.map(a=>`${p}${a}`).join(', ')}\n`;
                 msg += `📖 *Description* : ${cmd.desc || 'Aucune description fournie.'}\n`;
-                msg += `📝 *Utilisation* : ${cmd.usage ? `\`${cmd.usage}\`` : `\`.${cmd.name}\``}\n`;
+                msg += `📝 *Utilisation* : ${cmd.usage ? `\`${cmd.usage.replace(/^\./, p)}\`` : `\`${p}${cmd.name}\``}\n`;
                 msg += `📂 *Catégorie* : ${cmd.category.toUpperCase()}\n`;
                 if (cmd.adminOnly) msg += `⚠️ *Restriction* : Réservé aux administrateurs du bot.\n`;
                 if (cmd.masterOnly) msg += `👑 *Restriction* : Réservé au Maître hébergeur.\n`;
@@ -342,8 +343,9 @@ module.exports = [
             menuText += `║        *𝐒𝐏𝐈𝐑𝐈𝐓-𝐌𝐃*         ║\n`;
             menuText += `╚══════════════════════════╝\n\n`;
             menuText += `👑 *Propriétaire:* Ouédraogo Fabrice\n`;
-            menuText += `⚙️ *Mode:* ${ctx.currentMode.toUpperCase()}\n\n`;
-            menuText += `_Tapez_ \`.help <commande>\` _pour avoir les détails d'utilisation !_\n\n`;
+            menuText += `⚙️ *Mode:* ${ctx.currentMode.toUpperCase()}\n`;
+            menuText += `🔧 *Préfixe:* \`${p}\`\n\n`;
+            menuText += `_Tapez_ \`${p}help <commande>\` _pour avoir les détails d'utilisation !_\n\n`;
 
             const catMap = {
                 admin: '🔥 PARAMÈTRES ADMIN',
@@ -365,7 +367,7 @@ module.exports = [
                 if ((cat === 'system' || cat === 'saas') && !ctx.isMasterAdmin) continue;
 
                 menuText += `*${title}*\n`;
-                menuText += `> ${categories[cat].map(c => `.${c}`).join(' • ')}\n\n`;
+                menuText += `> ${categories[cat].map(c => `${p}${c}`).join(' • ')}\n\n`;
             }
 
             await ctx.reply(menuText.trim());
