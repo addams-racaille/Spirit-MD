@@ -363,6 +363,7 @@ module.exports = [
     },
     {
         name: 'setprefix',
+        aliases: ['prefix', 'setprefixe'],
         desc: 'Change le préfixe de déclenchement des commandes du bot (ex: . / ! / #). Effet immédiat, sans redémarrage.',
         usage: '.setprefix <nouveauPréfixe>',
         ownerOnly: true,

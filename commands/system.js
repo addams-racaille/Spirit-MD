@@ -327,6 +327,7 @@ module.exports = [
                 msg += `📝 *Utilisation* : ${cmd.usage ? `\`${cmd.usage.replace(/^\./, p)}\`` : `\`${p}${cmd.name}\``}\n`;
                 msg += `📂 *Catégorie* : ${cmd.category.toUpperCase()}\n`;
                 if (cmd.adminOnly) msg += `⚠️ *Restriction* : Réservé aux administrateurs du bot.\n`;
+                if (cmd.ownerOnly) msg += `👑 *Restriction* : Réservé au Propriétaire du bot.\n`;
                 if (cmd.masterOnly) msg += `👑 *Restriction* : Réservé au Maître hébergeur.\n`;
                 return await ctx.reply(msg);
             }

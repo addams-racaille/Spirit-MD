@@ -101,7 +101,7 @@ module.exports = async (sock, msg, messageCache) => {
     // Priorité : clef spécifique à la session > clef globale > config.PREFIX
     const sessionPrefixKey = `BOT_PREFIX_${sessionId}`;
     const sessionSpecificPrefix = await db.getVar(sessionPrefixKey, null);
-    const currentPrefix = sessionSpecificPrefix ?? await db.getVar('BOT_PREFIX', config.PREFIX);
+    const currentPrefix = sessionSpecificPrefix ?? config.PREFIX;
     if (body && body.startsWith(currentPrefix)) {
         const args = body.slice(currentPrefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
