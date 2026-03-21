@@ -17,9 +17,11 @@ function loadCommands() {
     for (const file of files) {
         try {
             const commandModule = require(path.join(commandsDir, file));
+            const categoryName = file.replace('.js', '');
             
             if (Array.isArray(commandModule)) {
                 for (const cmd of commandModule) {
+                    cmd.category = categoryName;
                     commands.set(cmd.name, cmd);
                     if (cmd.aliases) {
                         cmd.aliases.forEach(alias => commands.set(alias, cmd));

@@ -104,6 +104,8 @@ module.exports = [
     {
         name: 'play',
         aliases: ['song', 'yta', 'mp3', 'music', 'audio'],
+        desc: 'Télécharge une musique au format MP3 Haute Qualité via un lien direct ou une simple recherche textuelle.',
+        usage: '.play <lien ou titre>',
         execute: async (ctx) => {
             await downloadMedia(ctx, 'audio');
         }
@@ -111,6 +113,8 @@ module.exports = [
     {
         name: 'video',
         aliases: ['mp4', 'ytv', 'tiktok', 'ig', 'fb', 'reel'],
+        desc: 'Télécharge n\'importe quelle vidéo depuis YouTube, TikTok, Instagram (Reels), Facebook sans filigrane.',
+        usage: '.video <lien ou titre>',
         execute: async (ctx) => {
             await downloadMedia(ctx, 'video');
         }
@@ -118,6 +122,8 @@ module.exports = [
     {
         name: 'sticker',
         aliases: ['s', 'crop'],
+        desc: 'Transforme instantanément n\'importe quelle image, photo ou courte vidéo (<10s) en un sticker WhatsApp.',
+        usage: 'A répondre à un media avec: .sticker',
         execute: async (ctx) => {
             const { sock, msg, commandName, from, reply } = ctx;
             const context = msg.message?.extendedTextMessage?.contextInfo;
@@ -196,6 +202,8 @@ module.exports = [
     {
         name: 'vv',
         aliases: ['viewonce'],
+        desc: 'Contrecarre la "Vue Unique" en téléchargeant l\'image/vidéo éphémère directement dans le chat (Mode public).',
+        usage: 'A répondre au message éphémère: .vv',
         execute: async (ctx) => {
             const { sock, msg, from, reply } = ctx;
             const context = msg.message?.extendedTextMessage?.contextInfo;

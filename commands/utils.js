@@ -22,6 +22,8 @@ module.exports = [
     {
         name: 'msgs',
         groupOnly: true,
+        desc: 'Affiche un classement détaillé et les statistiques des membres les plus bavards du groupe.',
+        usage: '.msgs',
         execute: async (ctx) => {
             const { from, sock, msg, reply } = ctx;
             const stats = await db.fetchFromStore(from);
@@ -45,6 +47,8 @@ module.exports = [
     },
     {
         name: 'users',
+        desc: 'Dresse le top 10 des VIP du serveur ayant posté le plus gros de messages.',
+        usage: '.users [global] [limite]',
         execute: async (ctx) => {
             const { q, from, sock, msg, reply } = ctx;
             const isGlobal = q.includes('global') || !from.endsWith('@g.us');
@@ -85,7 +89,9 @@ module.exports = [
     {
         name: 'tagall',
         groupOnly: true,
-        masterOnly: true, // Only owner
+        masterOnly: true, 
+        desc: 'Notifie brutalement jusqu\'au fond de la couette tous les membres présents dans le groupe.',
+        usage: '.tagall [VOTRE MESSAGE]',
         execute: async (ctx) => {
             const { q, from, sock, isOwner, reply } = ctx;
             if (!isOwner) return await reply(`_❌ Réservé au propriétaire._`);
@@ -100,6 +106,8 @@ module.exports = [
     {
         name: 'poll',
         aliases: ['sondage'],
+        desc: 'Génère un sondage interactif et natif WhatsApp avec des options de votes précis.',
+        usage: '.poll Question|Option 1|Option 2|Option 3',
         execute: async (ctx) => {
             const { q, sock, from, reply } = ctx;
             const parts = q.split('|').map(s => s.trim()).filter(Boolean);
@@ -118,6 +126,8 @@ module.exports = [
     },
     {
         name: 'calc',
+        desc: 'Calculatrice scientifique en temps réel qui évalue proprement vos équations.',
+        usage: '.calc <1+2*8>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
             if (!q) return await reply(`_Utilisation : \`.calc 2+2*5\`_`);
@@ -134,6 +144,8 @@ module.exports = [
     {
         name: 'wiki',
         aliases: ['wikipedia'],
+        desc: 'Lance une recherche Wikipédia sur un sujet ou un mot et affiche son résumé.',
+        usage: '.wiki <terme de recherche>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
             if (!q) return await reply(`_Utilisation : \`.wiki <sujet>\`_`);
@@ -154,6 +166,8 @@ module.exports = [
     {
         name: 'translate',
         aliases: ['tr'],
+        desc: 'Traduit instantanément votre bloc de texte brut dans n\'importe quelle langue mondiale.',
+        usage: '.translate <code de langue> <votre texte>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const parts = q.split(' ');
@@ -173,10 +187,12 @@ module.exports = [
     {
         name: 'remind',
         aliases: ['rappel'],
+        desc: 'Conçois une alerte minutée : le bot t\'enverra un message en temps voulu !',
+        usage: '.remind <durée(10m/3h)> <texte rappelé>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
             const parts = q.split(' ');
-            const delayStr = parts[0]; // ex: 30m, 2h
+            const delayStr = parts[0]; 
             const message = parts.slice(1).join(' ');
             if (!delayStr || !message) return await reply(`_Utilisation : \`.remind 30m penser à appeler\`_\n_Unités : m (minutes), h (heures)_`);
             const match = delayStr.match(/^(\d+)(m|h)$/i);
@@ -192,6 +208,8 @@ module.exports = [
     {
         name: 'weather',
         aliases: ['meteo'],
+        desc: 'Télécharge une carte détaillée de la température et prévisions de la ville demandée.',
+        usage: '.weather <Paris/Montreal/etc>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
             if (!q) return await reply(`_Veuillez indiquer une ville. Ex: \`.météo Paris\`_`);
@@ -206,6 +224,8 @@ module.exports = [
     {
         name: 'qr',
         aliases: ['qrcode'],
+        desc: 'Fusionne votre phrase, mot, numéro ou URL secrète dans un beau QRCode prêt à scanner.',
+        usage: '.qr <URL ou donnée brute>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
             if (!q) return await reply(`_Indiquez un texte ou un lien. Ex: \`.qr Coucou\`_`);
@@ -217,6 +237,8 @@ module.exports = [
     },
     {
         name: 'tts',
+        desc: 'Donne de la voix text-to-speech vocale ! Il transmet un vocal synthétique.',
+        usage: '.tts [langue] <texte libre>',
         execute: async (ctx) => {
             const { q, args, sock, from, msg, reply } = ctx;
             let lang = 'fr';
@@ -235,6 +257,8 @@ module.exports = [
     {
         name: 'short',
         aliases: ['shorturl'],
+        desc: 'Compresse instantanément une très (trop?) longue URL hypertexte.',
+        usage: '.short <lien immensément long>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
             if (!q || !q.startsWith('http')) return await reply(`_Lien invalide. Ex: \`.short https://exemple.com\`_`);
@@ -246,6 +270,8 @@ module.exports = [
     },
     {
         name: 'github',
+        desc: 'Recherche la carte développeur Github publique de n\'importe quelle personne et sort ses repos.',
+        usage: '.github <pseudo de developpeur>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
             if (!q) return await reply(`_Indiquez un username. Ex: \`.github torvalds\`_`);
@@ -261,6 +287,8 @@ module.exports = [
     },
     {
         name: 'jid',
+        desc: 'Extirpe violemment la fameuse adresse chiffrée (@s.whatsapp.net / @g.us) indispensable en admin.',
+        usage: 'Repondre: .jid',
         execute: async (ctx) => {
             const { from, msg, reply } = ctx;
             const targetJid = msg.message?.extendedTextMessage?.contextInfo?.participant

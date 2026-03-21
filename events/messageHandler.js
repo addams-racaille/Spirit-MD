@@ -97,9 +97,10 @@ module.exports = async (sock, msg, messageCache) => {
         }
     }
 
-    // Traitement des commandes
-    if (body && body.startsWith(config.PREFIX)) {
-        const args = body.slice(config.PREFIX.length).trim().split(/ +/);
+    // Traitement des commandes (préfixe dynamique depuis la DB)
+    const currentPrefix = await db.getVar('BOT_PREFIX', config.PREFIX);
+    if (body && body.startsWith(currentPrefix)) {
+        const args = body.slice(currentPrefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
         const q = args.join(' ');
         

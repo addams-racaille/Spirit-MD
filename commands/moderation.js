@@ -35,6 +35,8 @@ function parseDuration(duration) {
 module.exports = [
     {
         name: 'inactive',
+        desc: 'Détecte les membres fantômes (inactifs), avec possibilité d\'expulsion massive (kick).',
+        usage: '.inactive <durée(10d|1m)> [kick]',
         groupOnly: true,
         execute: async (ctx) => {
             const { q, from, sock, reply } = ctx;
@@ -117,6 +119,8 @@ module.exports = [
     },
     {
         name: 'warn',
+        desc: 'Donne un avertissement officiel à un membre. (3 avertissements = Bannissement immédiat du groupe)',
+        usage: 'A répondre avec: .warn [raison]',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -139,6 +143,8 @@ module.exports = [
     },
     {
         name: 'warnings',
+        desc: 'Affiche publiquement le nombre d\'avertissements actuels (sur 3) d\'un membre spécifique.',
+        usage: '.warnings [@user]',
         groupOnly: true,
         execute: async (ctx) => {
             const { q, from, msg, reply } = ctx;
@@ -151,6 +157,8 @@ module.exports = [
     },
     {
         name: 'resetwarn',
+        desc: 'Pardonne un membre fautif et remet son compteur d\'avertissements à zéro (0/3).',
+        usage: '.resetwarn [@user]',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -164,6 +172,8 @@ module.exports = [
     },
     {
         name: 'kick',
+        desc: 'Expulse immédiatement un utilisateur du groupe sans avertissement ni sommations.',
+        usage: '.kick [@user]',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -181,6 +191,8 @@ module.exports = [
     },
     {
         name: 'promote',
+        desc: 'Offre le grade d\'Administrateur de Groupe à un simple membre sélectionné.',
+        usage: '.promote [@user]',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -195,6 +207,8 @@ module.exports = [
     },
     {
         name: 'demote',
+        desc: 'Retire violemment les droits d\'Administrateur à un utilisateur et le rétrograde simple membre.',
+        usage: '.demote [@user]',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -210,6 +224,8 @@ module.exports = [
     {
         name: 'group',
         aliases: ['groupe'],
+        desc: 'Ouvre ou Ferme le canal de discussion vocal/écrit du groupe aux non-admins.',
+        usage: '.group open / .group close',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -227,6 +243,8 @@ module.exports = [
     },
     {
         name: 'setdesc',
+        desc: 'Applique une nouvelle description au profil du groupe actuel en un battement de cil.',
+        usage: '.setdesc <description>',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
@@ -241,6 +259,8 @@ module.exports = [
     {
         name: 'link',
         aliases: ['lien'],
+        desc: 'Demande et extrait le lien d\'invitation unique (WhatsApp Link) pour intégrer ce groupe.',
+        usage: '.link',
         groupOnly: true,
         execute: async (ctx) => {
             const { from, sock, reply } = ctx;
@@ -252,6 +272,8 @@ module.exports = [
     },
     {
         name: 'hidetag',
+        desc: 'Mentionne secrètement TOUT LE GROUPE de manière cachée et invisible dans le message envoyé.',
+        usage: '.hidetag <votre grosse annonce>',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {

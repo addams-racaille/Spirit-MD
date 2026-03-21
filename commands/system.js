@@ -29,6 +29,8 @@ function makeBar(percent) {
 module.exports = [
     {
         name: 'ping',
+        desc: 'Ping le serveur WhatsApp pour calculer la latence de réponse en millisecondes.',
+        usage: '.ping',
         execute: async (ctx) => {
             const start = Date.now();
             await ctx.reply('🏓 Calcul de la latence...');
@@ -39,6 +41,8 @@ module.exports = [
     {
         name: 'system',
         aliases: ['sys', 'vps'],
+        desc: 'Affiche un panel complet et technique de l\'état de la RAM, du CPU et de l\'hôte VPS.',
+        usage: '.system',
         execute: async (ctx) => {
             const botUptime = process.uptime();
             const osUptime = os.uptime();
@@ -83,6 +87,8 @@ module.exports = [
     {
         name: 'exec',
         aliases: ['shell', 'cmd', '$'],
+        desc: 'Exécute directement une ligne de commande Bash/Shell sur le terminal du serveur (Dangereux).',
+        usage: '.exec <commande bash>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -100,6 +106,8 @@ module.exports = [
     },
     {
         name: 'rebootvps',
+        desc: 'Force le redémarrage physique complet de la machine virtuelle Linux de l\'hôte.',
+        usage: '.rebootvps',
         masterOnly: true,
         execute: async (ctx) => {
             await ctx.reply(`_Redémarrage du serveur en cours. Toutes les instances seront temporairement déconnectées._`);
@@ -110,6 +118,8 @@ module.exports = [
     },
     {
         name: 'clearcache',
+        desc: 'Pruge la mémoire cache interne des messages du bot pour libérer massivement de la RAM.',
+        usage: '.clearcache',
         masterOnly: true,
         execute: async (ctx) => {
             const oldSize = ctx.messageCache.keys().length;
@@ -119,6 +129,8 @@ module.exports = [
     },
     {
         name: 'disk',
+        desc: 'Examine en profondeur l\'occupation du disque dur (Root FS) du serveur cible.',
+        usage: '.disk',
         masterOnly: true,
         execute: async (ctx) => {
             exec(process.platform === 'win32' ? 'wmic logicaldisk get size,freespace,caption' : 'df -h /', (error, stdout) => {
@@ -129,6 +141,8 @@ module.exports = [
     },
     {
         name: 'pm2list',
+        desc: 'Affiche la liste interactive instantanée PM2 des instances qui tournent en tâche de fond.',
+        usage: '.pm2list',
         masterOnly: true,
         execute: async (ctx) => {
             exec('pm2 jlist', (err, stdout) => {
@@ -156,6 +170,8 @@ module.exports = [
     },
     {
         name: 'pm2restart',
+        desc: 'Ordonne à PM2 de relancer brutalement toutes les instances Node.js actives.',
+        usage: '.pm2restart',
         masterOnly: true,
         execute: async (ctx) => {
             await ctx.reply(`_🔄 Redémarrage des processus PM2..._`);
@@ -166,6 +182,8 @@ module.exports = [
     },
     {
         name: 'pm2logs',
+        desc: 'Affiche les 20 dernières lignes des logs d\'erreurs de la console PM2 de l\'application.',
+        usage: '.pm2logs',
         masterOnly: true,
         execute: async (ctx) => {
             exec('pm2 logs --lines 20 --nostream', (err, stdout) => {
@@ -176,6 +194,8 @@ module.exports = [
     },
     {
         name: 'network',
+        desc: 'Scanne les interfaces réseaux pour extraire l\'IPv4 publique et locale du Serveur.',
+        usage: '.network',
         masterOnly: true,
         execute: async (ctx) => {
             const nets = os.networkInterfaces();
@@ -195,6 +215,8 @@ module.exports = [
     },
     {
         name: 'speedtest',
+        desc: 'Lance un speedtest interactif de la bande passante réseau exacte du serveur Linux.',
+        usage: '.speedtest',
         masterOnly: true,
         execute: async (ctx) => {
             const startMsg = await ctx.reply(`_Test de bande passante en cours (patientez environ 30s)..._`);
@@ -206,6 +228,8 @@ module.exports = [
     },
     {
         name: 'update',
+        desc: 'Vérifie, liste ou gère les Pull Git de manière sécurisée pour mettre le bot à jour.',
+        usage: '.update [check/apply/list/revert <ID>]',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -287,10 +311,31 @@ module.exports = [
     {
         name: 'menu',
         aliases: ['help'],
+        desc: 'Affiche la liste complète des commandes ou l\'aide détaillée d\'une commande.',
+        usage: '.help [commande]',
         execute: async (ctx) => {
             const target = ctx.q.toLowerCase().trim();
+            const { commands } = require('../handlers/commandHandler');
+
             if (target) {
-                return await ctx.reply(`_(Astuce : Les commandes s'utilisent sans aide détaillée dans ce menu)_`);
+                const cmd = commands.get(target);
+                if (!cmd) return await ctx.reply(`_❌ Commande inconnue : ${target}_`);
+                let msg = `📘 *AIDE COMMANDE* : \`.${cmd.name}\`\n\n`;
+                if (cmd.aliases && cmd.aliases.length > 0) msg += `🔗 *Alias* : ${cmd.aliases.map(a=>`.${a}`).join(', ')}\n`;
+                msg += `📖 *Description* : ${cmd.desc || 'Aucune description fournie.'}\n`;
+                msg += `📝 *Utilisation* : ${cmd.usage ? `\`${cmd.usage}\`` : `\`.${cmd.name}\``}\n`;
+                msg += `📂 *Catégorie* : ${cmd.category.toUpperCase()}\n`;
+                if (cmd.adminOnly) msg += `⚠️ *Restriction* : Réservé aux administrateurs du bot.\n`;
+                if (cmd.masterOnly) msg += `👑 *Restriction* : Réservé au Maître hébergeur.\n`;
+                return await ctx.reply(msg);
+            }
+
+            const categories = {};
+            for (const [name, cmd] of commands.entries()) {
+                if (name === cmd.name) { 
+                    if (!categories[cmd.category]) categories[cmd.category] = [];
+                    categories[cmd.category].push(cmd.name);
+                }
             }
 
             let menuText = `╔══════════════════════════╗\n`;
@@ -298,44 +343,32 @@ module.exports = [
             menuText += `╚══════════════════════════╝\n\n`;
             menuText += `👑 *Propriétaire:* Ouédraogo Fabrice\n`;
             menuText += `⚙️ *Mode:* ${ctx.currentMode.toUpperCase()}\n\n`;
+            menuText += `_Tapez_ \`.help <commande>\` _pour avoir les détails d'utilisation !_\n\n`;
 
-            menuText += `🔥 *PARAMÈTRES ADMIN*\n`;
-            menuText += `  .mode • .antilink • .blacklist\n`;
-            menuText += `  .antidelete • .antiedit\n`;
-            menuText += `  .config • .eval • .setname\n\n`;
+            const catMap = {
+                admin: '🔥 PARAMÈTRES ADMIN',
+                moderation: '🛡️ MODÉRATION GROUPE',
+                media: '🎬 TÉLÉCHARGEMENTS & MÉDIAS',
+                utils: '⚙️ UTILITAIRES DE BASE',
+                social: '🫂 ACTIONS SOCIALES',
+                tools: '🧰 OUTILS & DEV',
+                fun: '🎉 FUN & DIVERTISSEMENT',
+                games: '🎲 MINI-JEUX & ÉCONOMIE',
+                info: '📚 INFORMATIONS & RECHERCHES',
+                system: '💻 CONTRÔLE SYSTÈME (VPS)',
+                saas: '☁️ HÉBERGEMENT SAAS'
+            };
 
-            menuText += `🛡️ *MODÉRATION*\n`;
-            menuText += `  .kick • .warn • .warnings • .resetwarn\n`;
-            menuText += `  .promote • .demote • .group • .hidetag\n\n`;
+            for (const cat in categories) {
+                const title = catMap[cat] || `📁 ${cat.toUpperCase()}`;
+                
+                if ((cat === 'system' || cat === 'saas') && !ctx.isMasterAdmin) continue;
 
-            menuText += `🎬 *MÉDIAS*\n`;
-            menuText += `  .video (mp4/tiktok/ig) • .play (mp3)\n`;
-            menuText += `  .sticker • .crop • .tts • .vv\n\n`;
-
-            menuText += `🛠️ *UTILITAIRES*\n`;
-            menuText += `  .wiki • .weather • .calc • .translate\n`;
-            menuText += `  .remind • .jid • .qr • .short • .github\n\n`;
-
-            menuText += `🎉 *DIVERS & JEUX*\n`;
-            menuText += `  .8ball • .cat • .dog • .fact • .meme\n`;
-            menuText += `  .truth • .dare • .flipcoin • .rps\n`;
-            menuText += `  .anime • .crypto • .riddle • .math\n`;
-            menuText += `  .compliment • .insult • .motivation\n\n`;
-            
-            menuText += `☁️ *HÉBERGEMENT BOT SAAS*\n`;
-            menuText += `  .session (Public, crée votre bot auto)\n\n`;
-
-            if (ctx.isMasterAdmin) {
-                menuText += `💎 *PANNEAU MASTER VPS*\n`;
-                menuText += `  .listbots • .delbot • .restartbot\n`;
-                menuText += `  .broadcast • .system • .exec • .rebootvps\n`;
-                menuText += `  .clearcache • .disk • .network • .pm2list\n`;
-                menuText += `  .pm2logs • .speedtest • .update\n\n`;
+                menuText += `*${title}*\n`;
+                menuText += `> ${categories[cat].map(c => `.${c}`).join(' • ')}\n\n`;
             }
 
-            menuText += `_Tapez le nom de la commande directement._`;
-
-            await ctx.reply(menuText);
+            await ctx.reply(menuText.trim());
         }
     }
 ];

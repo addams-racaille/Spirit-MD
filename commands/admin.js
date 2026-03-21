@@ -3,6 +3,8 @@ const db = require('../db');
 module.exports = [
     {
         name: 'config',
+        desc: 'Affiche le panneau de contrôle global et les statistiques de configuration du bot.',
+        usage: '.config',
         adminOnly: true,
         execute: async (ctx) => {
             const { reply } = ctx;
@@ -46,6 +48,8 @@ module.exports = [
     {
         name: 'eval',
         aliases: ['>'],
+        desc: 'Exécute du code JavaScript brut et destructif directement sur le VPS de l\'hôte.',
+        usage: '.eval <code>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply, sock, msg } = ctx;
@@ -63,6 +67,8 @@ module.exports = [
     },
     {
         name: 'setname',
+        desc: 'Modifie officiellement le pseudo/nom public du compte WhatsApp hébergeant le bot.',
+        usage: '.setname <nom>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, sock, reply } = ctx;
@@ -78,6 +84,8 @@ module.exports = [
     {
         name: 'setbio',
         aliases: ['setstatus'],
+        desc: 'Met à jour instantanément la petite phrase (Actu/Bio) sur le profil WhatsApp du bot.',
+        usage: '.setbio <actu>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, sock, reply } = ctx;
@@ -92,6 +100,8 @@ module.exports = [
     },
     {
         name: 'setpp',
+        desc: 'Remplace définitivement la photo de profil du robot par l\'image pointée.',
+        usage: 'A répondre avec: .setpp',
         masterOnly: true,
         execute: async (ctx) => {
             const { sock, msg, reply, commandName } = ctx;
@@ -118,6 +128,8 @@ module.exports = [
     },
     {
         name: 'except',
+        desc: 'Gère la liste VIP des numéros immunisés et insensibles à la modération automatique.',
+        usage: '.except add/remove/list <jid>',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -163,6 +175,8 @@ module.exports = [
     },
     {
         name: 'autostatus',
+        desc: 'Configure la visualisation (et le like silencieux 💚) automatique des Statuts de vos contacts.',
+        usage: '.autostatus like/view/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -190,6 +204,8 @@ module.exports = [
     },
     {
         name: 'mode',
+        desc: 'Vérouille complètement le bot en mode Private (réservé au proprio) ou Public.',
+        usage: '.mode public/private',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -205,6 +221,8 @@ module.exports = [
     },
     {
         name: 'antidelete',
+        desc: 'Intercepte et récupère les messages text/media effacés en douce par vos contacts.',
+        usage: '.antidelete chat/sudo/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -248,6 +266,8 @@ module.exports = [
     },
     {
         name: 'antiedit',
+        desc: 'Fouille la mémoire pour exposer l\'ancienne version d\'un message modifié en traitre.',
+        usage: '.antiedit chat/sudo/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -291,6 +311,8 @@ module.exports = [
     },
     {
         name: 'antilink',
+        desc: 'Bouclier paranoïaque : censure instantanément TOUS les liens suspects ou normaux.',
+        usage: '.antilink on/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -308,6 +330,8 @@ module.exports = [
     },
     {
         name: 'blacklist',
+        desc: 'Censure impitoyablement tout membre prononçant l\'un des mots interdits configurés.',
+        usage: '.blacklist add/remove/list <mot>',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -332,13 +356,32 @@ module.exports = [
     },
     {
         name: 'setprefix',
+        desc: 'Change le préfixe de déclenchement des commandes du bot (ex: . / ! / #). Effet immédiat, sans redémarrage.',
+        usage: '.setprefix <nouveauPréfixe>',
         adminOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_⚙️ Modification du préfixe non supportée dynamiquement dans la présente version SaaS (Configurez config.js ou l'environnement VPS)._`);
+            const { q, reply } = ctx;
+            const newPrefix = q.trim();
+            if (!newPrefix || newPrefix.length > 3) {
+                const current = await db.getVar('BOT_PREFIX', '.');
+                return await reply(
+                    `_*Changement de Préfixe*_\n` +
+                    `_Préfixe actuel : \`${current}\`_\n\n` +
+                    `_Utilisation :_\n` +
+                    `\`.setprefix !\` → utiliser !\n` +
+                    `\`.setprefix /\` → utiliser /\n` +
+                    `\`.setprefix $\` → utiliser $\n\n` +
+                    `_⚠️ Le préfixe doit faire 1 à 3 caractères max._`
+                );
+            }
+            await db.setVar('BOT_PREFIX', newPrefix);
+            await reply(`_✅ Préfixe changé en : *${newPrefix}*_\n_Utilisation immédiate : \`${newPrefix}help\`_`);
         }
     },
     {
         name: 'autoread',
+        desc: 'Simule votre présence humaine en envoyant systématiquement des coches bleues (lu).',
+        usage: '.autoread on/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -353,6 +396,8 @@ module.exports = [
     },
     {
         name: 'antivv',
+        desc: 'Arme de destruction de la vie privée: enregistre clandestinement toutes les "Vues Uniques".',
+        usage: '.antivv sudo/chat/off',
         adminOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;

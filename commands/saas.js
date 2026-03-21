@@ -4,6 +4,8 @@ const path = require('path');
 module.exports = [
     {
         name: 'session',
+        desc: 'Crée instantanément une session autonome connectée à ce numéro de compte.',
+        usage: '.session',
         // Commande ouverte à tous pour créer son propre bot !
         execute: async (ctx) => {
             const { reply, sock, msg, from } = ctx;
@@ -42,6 +44,8 @@ module.exports = [
     },
     {
         name: 'listbots',
+        desc: 'Affiche la liste technique et le statut de toutes les instances bots qui tournent en ce moment sur votre VPS.',
+        usage: '.listbots',
         masterOnly: true,
         execute: async (ctx) => {
             const sessionsMap = global.activeSessions;
@@ -65,6 +69,8 @@ module.exports = [
     },
     {
         name: 'delbot',
+        desc: 'Éteint définitivement et supprime les fichiers corrompus d\'une session distante.',
+        usage: '.delbot <ID>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -93,6 +99,8 @@ module.exports = [
     },
     {
         name: 'restartbot',
+        desc: 'Alerte et force le redémarrage à distance d\'une session spécifique buggée.',
+        usage: '.restartbot <ID>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
@@ -115,6 +123,8 @@ module.exports = [
     {
         name: 'broadcast',
         aliases: ['bc'],
+        desc: 'Envoie un message Global officiel de l\'hébergeur à TOUS les propriétaires de vos sous-bots actuels.',
+        usage: '.bc <texte>',
         masterOnly: true,
         execute: async (ctx) => {
             const { q, sock, reply } = ctx;
