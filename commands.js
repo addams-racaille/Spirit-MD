@@ -8,6 +8,7 @@ const db = require('./db');
 const axios = require('axios');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const ffmpeg = require('fluent-ffmpeg');
+const { exec } = require('child_process');
 
 const crypto = require('crypto');
 
@@ -1015,6 +1016,30 @@ module.exports = async (sock, msg, commandName, q, from) => {
             }
         }
 
+        // 17. Mise à jour automatique GitHub
+        if (commandName === 'update') {
+            if (!isOwner) return await reply(`_❌ Seul le propriétaire peut lancer une mise à jour distante._`);
+            await reply(`_⏳ Vérification des mises à jour sur GitHub..._`);
+            
+            exec('git pull origin main', async (error, stdout, stderr) => {
+                const output = stdout.trim() || stderr.trim();
+                
+                if (error && !output.includes('Already up to date')) {
+                    console.log(chalk.red('Erreur Git Pull:'), error.message);
+                    return await reply(`_❌ Échec de la mise à jour._\n\n\`\`\`${output}\`\`\``);
+                }
+                
+                if (output.includes('Already up to date')) {
+                    return await reply(`_✅ Le bot est déjà sur la version la plus récente._`);
+                }
+                
+                await reply(`_🚀 Mise à jour téléchargée avec succès._\n\n\`\`\`${output}\`\`\`\n\n_Redémarrage en cours (Patientez 5 secondes)..._`);
+                
+                // Quitter proprement pour que PM2 relance le bot
+                setTimeout(() => process.exit(0), 1000);
+            });
+        }
+
         // ─── MENU & AIDE ─────────────────────────────────────────────────────
         if (commandName === 'menu' || commandName === 'help') {
             const targetCmd = q.toLowerCase().trim();
@@ -1045,6 +1070,7 @@ module.exports = async (sock, msg, commandName, q, from) => {
                     'hidetag': `*AIDE : .hidetag*\n\n_Sonne tous les membres d'un groupe mais le message ne montre pas de longs tags visuels._`,
                     'tts': `*AIDE : .tts*\n\n_Transforme du texte en audio (Text-to-Speech)._\n_Ex: \`.tts fr Salut\` ou \`.tts en Hello\`._`,
                     'jid': `*AIDE : .jid*\n\n_Obtient le JID (identifiant WhatsApp) d'un utilisateur ou d'un groupe.\nObtiens le JID d'une mention, en répondant à un message, ou tape juste \`.jid\`._`,
+                    'update': `*AIDE : .update*\n\n_Connecte le bot à GitHub pour télécharger le tout dernier code source et se redémarre tout seul._\n\n_⚠️ Uniquement pour le propriétaire et sur VPS avec PM2._`,
                 };
 
                 const helpText = helps[targetCmd.replace('.', '')] || helps[targetCmd];
@@ -1070,7 +1096,7 @@ module.exports = async (sock, msg, commandName, q, from) => {
             menuText += `🛡️ *ADMIN & CONFIG*\n`;
             menuText += `- .config  .mode  .autostatus\n`;
             menuText += `- .antidelete  .antiedit  .antilink\n`;
-            menuText += `- .blacklist  .inactive  .except\n\n`;
+            menuText += `- .blacklist  .inactive  .except  .update\n\n`;
 
             menuText += `👥 *GROUPE (Admin)*\n`;
             menuText += `- .promote  .demote  .group [open/close]\n`;
