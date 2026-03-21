@@ -931,7 +931,7 @@ module.exports = async (sock, msg, commandName, q, from) => {
             }
             if (!text) return await reply(`_Texte manquant. Ex: \`.tts fr Bonjour\`_`);
             try {
-                const ttsUrl = `http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=32&client=tw-ob&q=${encodeURIComponent(text)}&tl=${lang}`;
+                const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}`;
                 await sock.sendMessage(from, { audio: { url: ttsUrl }, mimetype: 'audio/mpeg', ptt: true }, { quoted: msg });
             } catch(e) { await reply(`_❌ Erreur TTS._`); }
         }
@@ -1083,46 +1083,46 @@ module.exports = async (sock, msg, commandName, q, from) => {
             const currentMode = await db.getVar('MODE', 'public');
             const antiDeleteMode = await db.getVar('ANTI_DELETE', 'chat');
             const antiEditMode = await db.getVar('ANTI_EDIT', 'chat');
-            const autoStatusMode = await db.getVar('AUTO_STATUS', 'like');
-            const antiLinkMode = await db.getVar('ANTI_LINK', 'off');
 
-            let menuText = `⚙️ *MENU PRINCIPAL - ${config.BOT_NAME}*\n\n`;
-            menuText += `🔹 *Mode* : ${currentMode}\n`;
-            menuText += `🔹 *Auto-Status* : ${autoStatusMode === 'off' ? 'Inactif ❌' : 'Actif (' + autoStatusMode + ')'}\n`;
-            menuText += `🔹 *Anti-Delete* : ${antiDeleteMode === 'off' ? 'Inactif ❌' : 'Actif (' + antiDeleteMode + ')'}\n`;
-            menuText += `🔹 *Anti-Edit* : ${antiEditMode === 'off' ? 'Inactif ❌' : 'Actif (' + antiEditMode + ')'}\n`;
-            menuText += `🔹 *Anti-Link* : ${antiLinkMode === 'on' ? 'Actif ✅' : 'Inactif ❌'}\n\n`;
+            let menuText = `╭━━━〔 *${config.BOT_NAME.toUpperCase()}* 〕━━━\n`;
+            menuText += `┃ 👤 *Propriétaire* : ${config.OWNER_NUMBER}\n`;
+            menuText += `┃ ⚙️ *Mode* : ${currentMode}\n`;
+            menuText += `┃ 🛡️ *Anti-Del* : ${antiDeleteMode !== 'off' ? '✅' : '❌'}\n`;
+            menuText += `┃ 📝 *Anti-Edit* : ${antiEditMode !== 'off' ? '✅' : '❌'}\n`;
+            menuText += `╰━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-            menuText += `🛡️ *ADMIN & CONFIG*\n`;
-            menuText += `- .config  .mode  .autostatus\n`;
-            menuText += `- .antidelete  .antiedit  .antilink\n`;
-            menuText += `- .blacklist  .inactive  .except  .update\n\n`;
+            menuText += `╭━━━〔 🛡️ *MODÉRATION* 〕\n`;
+            menuText += `┃ ⊳ .kick / .warn / .warnings / .resetwarn\n`;
+            menuText += `┃ ⊳ .promote / .demote\n`;
+            menuText += `┃ ⊳ .group open / .group close\n`;
+            menuText += `┃ ⊳ .setdesc / .link\n`;
+            menuText += `╰━━━\n\n`;
 
-            menuText += `👥 *GROUPE (Admin)*\n`;
-            menuText += `- .promote  .demote  .group [open/close]\n`;
-            menuText += `- .setdesc  .link  .kick  .warn\n`;
-            menuText += `- .warnings  .resetwarn  .hidetag  .tagall\n\n`;
+            menuText += `╭━━━〔 ⚙️ *CONFIGURATION* 〕\n`;
+            menuText += `┃ ⊳ .config / .mode / .autostatus\n`;
+            menuText += `┃ ⊳ .antidelete / .antiedit / .antilink\n`;
+            menuText += `┃ ⊳ .blacklist / .except\n`;
+            menuText += `┃ ⊳ .update (Bot GitHub)\n`;
+            menuText += `╰━━━\n\n`;
 
-            menuText += `🎨 *MÉDIAS*\n`;
-            menuText += `- .sticker / .s  .crop  .vv\n`;
-            menuText += `- .tts  .qr\n\n`;
+            menuText += `╭━━━〔 🎨 *MÉDIAS & MUSIQUE* 〕\n`;
+            menuText += `┃ ⊳ .sticker / .crop / .vv\n`;
+            menuText += `┃ ⊳ .tts / .qr\n`;
+            menuText += `┃ ⊳ .play <titre>\n`;
+            menuText += `╰━━━\n\n`;
 
-            menuText += `🌐 *INFOS & OUTILS*\n`;
-            menuText += `- .wiki  .quote  .translate  .calc\n`;
-            menuText += `- .weather  .short  .github  .poll\n`;
-            menuText += `- .remind  .system  .ping  .jid\n\n`;
+            menuText += `╭━━━〔 🌐 *UTILITAIRES* 〕\n`;
+            menuText += `┃ ⊳ .wiki / .weather / .calc\n`;
+            menuText += `┃ ⊳ .translate / .short / .github\n`;
+            menuText += `┃ ⊳ .remind / .poll / .system / .jid\n`;
+            menuText += `┃ ⊳ .tagall / .hidetag\n`;
+            menuText += `╰━━━\n\n`;
 
-            menuText += `🕹️ *FUN & JEUX*\n`;
-            menuText += `- .joke  .dice  .love\n\n`;
-
-            menuText += `📊 *STATS*\n`;
-            menuText += `- .msgs  .users [10|global]\n\n`;
-
-            menuText += `🎧 *MUSIQUE*\n`;
-            menuText += `- ${aliases.map(a => `${config.PREFIX}${a}`).join(' / ')}\n`;
-            menuText += `  _+ titre ou YouTube_\n\n`;
+            menuText += `╭━━━〔 🕹️ *FUN* 〕\n`;
+            menuText += `┃ ⊳ .joke / .dice / .love / .quote\n`;
+            menuText += `╰━━━\n\n`;
             
-            menuText += `_💡 Tape \`.help <commande>\` pour des détails._`;
+            menuText += `_💡 Pour plus de détails : \`.help <commande>\`_`;
 
             await reply(menuText);
         }
