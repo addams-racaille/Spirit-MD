@@ -1,0 +1,28 @@
+module.exports = [
+    // 1 à 25 - Social Commands (25 Commandes)
+    { name: 'hug', execute: async(ctx) => await ctx.reply(`🫂 *@${ctx.pushName}* fait un gros câlin à la cible !`) },
+    { name: 'kiss', execute: async(ctx) => await ctx.reply(`💋 *@${ctx.pushName}* envoie un bisou passionné !`) },
+    { name: 'punch', execute: async(ctx) => await ctx.reply(`🥊 *@${ctx.pushName}* donne un coup de poing sec ! Ouch !`) },
+    { name: 'slap', execute: async(ctx) => await ctx.reply(`🤚 *@${ctx.pushName}* met une énorme baffe ! Ça claque !`) },
+    { name: 'pat', execute: async(ctx) => await ctx.reply(`✋ *@${ctx.pushName}* tapote doucement la tête de la cible.`) },
+    { name: 'poke', execute: async(ctx) => await ctx.reply(`👉 *@${ctx.pushName}* pique la cible avec son doigt. *Boop !*`) },
+    { name: 'bite', execute: async(ctx) => await ctx.reply(`🦷 *@${ctx.pushName}* mord sauvagement la pauvre victime !`) },
+    { name: 'kill', execute: async(ctx) => await ctx.reply(`🔪 *@${ctx.pushName}* a assassiné froidement la cible... RIP.`) },
+    { name: 'resurrect', execute: async(ctx) => await ctx.reply(`⚕️ *@${ctx.pushName}* incante une magie de résurrection. Tu es vivant !`) },
+    { name: 'marry', execute: async(ctx) => await ctx.reply(`💍 *@${ctx.pushName}* fait sa demande en mariage ! Alors, oui ou non ?`) },
+    { name: 'divorce', execute: async(ctx) => await ctx.reply(`💔 *@${ctx.pushName}* signe les papiers du divorce. C'est fini...`) },
+    { name: 'highfive', execute: async(ctx) => await ctx.reply(`🙌 *@${ctx.pushName}* fait un High-Five épique !`) },
+    { name: 'handshake', execute: async(ctx) => await ctx.reply(`🤝 *@${ctx.pushName}* initie une belle poignée de main professionnelle.`) },
+    { name: 'wave', execute: async(ctx) => await ctx.reply(`👋 *@${ctx.pushName}* fait un coucou au loin.`) },
+    { name: 'wink', execute: async(ctx) => await ctx.reply(`😉 *@${ctx.pushName}* fait un petit clin d'oeil complice.`) },
+    { name: 'stare', execute: async(ctx) => await ctx.reply(`👀 *@${ctx.pushName}* fixe intensément la cible avec un regard lourd de sens...`) },
+    { name: 'cuddle', execute: async(ctx) => await ctx.reply(`🥰 *@${ctx.pushName}* blottit la cible contre lui pour des câlins doux.`) },
+    { name: 'lick', execute: async(ctx) => await ctx.reply(`👅 *@${ctx.pushName}* lèche le visage de sa cible. Euh... ok ?`) },
+    { name: 'nosebleed', execute: async(ctx) => await ctx.reply(`🩸 *@${ctx.pushName}* saigne du nez d'excitation !`) },
+    { name: 'blush', execute: async(ctx) => await ctx.reply(`😳 *@${ctx.pushName}* rougit violemment. Quelqu'un est timide !`) },
+    { name: 'cry', execute: async(ctx) => await ctx.reply(`😭 *@${ctx.pushName}* pleure à chaudes larmes... consolez-le/la !`) },
+    { name: 'laugh', execute: async(ctx) => await ctx.reply(`🤣 *@${ctx.pushName}* explose de rire et n'arrive plus à s'arrêter !`) },
+    { name: 'smile', execute: async(ctx) => await ctx.reply(`😊 *@${ctx.pushName}* sourit tendrement.`) },
+    { name: 'thumbsup', execute: async(ctx) => await ctx.reply(`👍 *@${ctx.pushName}* lève le pouce en signe d'approbation.`) },
+    { name: 'applause', execute: async(ctx) => await ctx.reply(`👏 *@${ctx.pushName}* applaudit à tout rompre ! Bravo !`) }
+];
