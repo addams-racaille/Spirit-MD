@@ -1110,6 +1110,50 @@ module.exports = async (sock, msg, commandName, q, from, messageCache) => {
             }
         }
 
+        if (commandName === 'restartbot') {
+            if (!isMasterAdmin) return;
+            if (!q) return await reply(`_Précisez l'ID du bot (ex: user_336... ou master)._`);
+            const targetId = q.trim();
+            const sessionsMap = global.activeSessions;
+            if (sessionsMap && sessionsMap.has(targetId)) {
+                try {
+                    const sSock = sessionsMap.get(targetId);
+                    sSock.end(new Error('Restart Requested')); // Force la déconnexion
+                    await reply(`_✅ Le bot **${targetId}** est en train de redémarrer..._`);
+                } catch(e) {
+                    await reply(`_❌ Erreur: ${e.message}_`);
+                }
+            } else {
+                await reply(`_❌ Bot introuvable en mémoire._`);
+            }
+        }
+
+        if (commandName === 'logs') {
+            if (!isMasterAdmin) return;
+            if (!q) return await reply(`_Précisez l'ID (ex: user_336... ou master)_`);
+            const targetId = q.trim();
+            try {
+                const logPath = require('path').join(__dirname, 'logs', 'out.log');
+                if (!require('fs').existsSync(logPath)) return await reply(`_Fichier log inexistant._`);
+                // Lire les 15000 derniers caractères pour économiser la RAM
+                const stats = require('fs').statSync(logPath);
+                const startPos = Math.max(0, stats.size - 15000);
+                let buffer = Buffer.alloc(15000);
+                const fd = require('fs').openSync(logPath, 'r');
+                const bytesRead = require('fs').readSync(fd, buffer, 0, 15000, startPos);
+                require('fs').closeSync(fd);
+                
+                const lines = buffer.toString('utf-8', 0, bytesRead).split('\n');
+                const filtered = lines.filter(l => l.includes(`[${targetId}]`));
+                const lastLines = filtered.slice(-15).join('\n');
+                
+                if (!lastLines) return await reply(`_Aucun log trouvé pour ${targetId}._`);
+                await reply(`📄 *LOGS - ${targetId}*\n\n\`\`\`\n${lastLines}\n\`\`\``);
+            } catch (e) {
+                await reply(`_❌ Erreur lecture logs : ${e.message}_`);
+            }
+        }
+
         // ─── MENU & AIDE ─────────────────────────────────────────────────────
         if (commandName === 'menu' || commandName === 'help') {
             const targetCmd = q.toLowerCase().trim();
@@ -1154,52 +1198,36 @@ module.exports = async (sock, msg, commandName, q, from, messageCache) => {
             const antiDeleteMode = await db.getVar('ANTI_DELETE', 'chat');
             const antiEditMode = await db.getVar('ANTI_EDIT', 'chat');
 
-            let menuText = `╭━━━〔 *${config.BOT_NAME.toUpperCase()}* 〕━━━\n`;
-            menuText += `┃ 👤 *Propriétaire* : ${config.OWNER_NUMBER}\n`;
-            menuText += `┃ ⚙️ *Mode* : ${currentMode}\n`;
-            menuText += `┃ 🛡️ *Anti-Del* : ${antiDeleteMode !== 'off' ? '✅' : '❌'}\n`;
-            menuText += `┃ 📝 *Anti-Edit* : ${antiEditMode !== 'off' ? '✅' : '❌'}\n`;
-            menuText += `╰━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            let menuText = `┌─── 「  *𝐒𝐏𝐈𝐑𝐈𝐓-𝐌𝐃*  」 ───\n`;
+            menuText += `│ 👤 *Propriétaire:* Ouédraogo Fabrice\n`;
+            menuText += `│ ⚙️ *Mode:* ${currentMode}\n`;
+            menuText += `└─────────────────────\n\n`;
 
-            menuText += `╭━━━〔 🛡️ *MODÉRATION* 〕\n`;
-            menuText += `┃ ⊳ .kick / .warn / .warnings / .resetwarn\n`;
-            menuText += `┃ ⊳ .promote / .demote\n`;
-            menuText += `┃ ⊳ .group open / .group close\n`;
-            menuText += `┃ ⊳ .setdesc / .link\n`;
-            menuText += `╰━━━\n\n`;
+            menuText += `✦ 𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗜𝗢𝗡\n`;
+            menuText += `  .kick • .warn • .warnings • .resetwarn\n`;
+            menuText += `  .promote • .demote • .group\n\n`;
 
-            menuText += `╭━━━〔 ⚙️ *CONFIGURATION* 〕\n`;
-            menuText += `┃ ⊳ .config / .mode / .autostatus\n`;
-            menuText += `┃ ⊳ .antidelete / .antiedit / .antilink\n`;
-            menuText += `┃ ⊳ .blacklist / .except\n`;
-            menuText += `┃ ⊳ .update (Bot GitHub)\n`;
-            menuText += `╰━━━\n\n`;
+            menuText += `✦ 𝗖𝗢𝗡𝗙𝗜𝗚\n`;
+            menuText += `  .mode • .antilink • .blacklist\n`;
+            menuText += `  .antidelete • .antiedit\n\n`;
 
-            menuText += `╭━━━〔 🎨 *MÉDIAS & MUSIQUE* 〕\n`;
-            menuText += `┃ ⊳ .sticker / .crop / .vv\n`;
-            menuText += `┃ ⊳ .tts / .qr\n`;
-            menuText += `┃ ⊳ .play <titre>\n`;
-            menuText += `╰━━━\n\n`;
+            menuText += `✦ 𝗠𝗘𝗗𝗜𝗔𝗦\n`;
+            menuText += `  .sticker • .play • .tts • .vv\n\n`;
 
-            menuText += `╭━━━〔 🌐 *UTILITAIRES* 〕\n`;
-            menuText += `┃ ⊳ .wiki / .weather / .calc\n`;
-            menuText += `┃ ⊳ .translate / .short / .github\n`;
-            menuText += `┃ ⊳ .remind / .poll / .system / .jid\n`;
-            menuText += `┃ ⊳ .tagall / .hidetag\n`;
-            menuText += `╰━━━\n\n`;
+            menuText += `✦ 𝗨𝗧𝗜𝗟𝗦\n`;
+            menuText += `  .wiki • .weather • .calc • .translate\n`;
+            menuText += `  .remind • .jid • .hidetag\n\n`;
+
+            menuText += `✦ 𝗙𝗨𝗡\n`;
+            menuText += `  .joke • .dice • .love • .quote\n\n`;
 
             if (isMasterAdmin) {
-                menuText += `╭━━━〔 👑 *SUPER ADMIN SAAS* 〕\n`;
-                menuText += `┃ ⊳ .session <numero>\n`;
-                menuText += `┃ ⊳ .listbots / .delbot\n`;
-                menuText += `╰━━━\n\n`;
+                menuText += `✦ 𝗦𝗨𝗣𝗘𝗥𝗔𝗗𝗠𝗜𝗡 𝗦𝗔𝗔𝗦\n`;
+                menuText += `  .session • .listbots\n`;
+                menuText += `  .delbot • .restartbot • .logs\n\n`;
             }
 
-            menuText += `╭━━━〔 🕹️ *FUN* 〕\n`;
-            menuText += `┃ ⊳ .joke / .dice / .love / .quote\n`;
-            menuText += `╰━━━\n\n`;
-            
-            menuText += `_💡 Pour plus de détails : \`.help <commande>\`_`;
+            menuText += `_💡 Plus d'infos : \`.help <commande>\`_`;
 
             await reply(menuText);
         }
