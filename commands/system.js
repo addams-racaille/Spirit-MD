@@ -208,16 +208,59 @@ module.exports = [
         name: 'update',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_⏳ Synchronisation avec le dépôt GitHub..._`);
-            exec('git fetch origin main && git reset --hard origin/main', async (error, stdout, stderr) => {
-                const output = stdout.trim() || stderr.trim();
-                if (error) {
-                    return await ctx.reply(`*❌ ERREUR LORS DU TÉLÉCHARGEMENT*\n\n\`\`\`${output}\`\`\``);
-                }
-                await ctx.reply(`*✅ MISE À JOUR TERMINÉE*\n\n\`\`\`${output}\`\`\`\n\n*Redémarrage en cours (5s)...*`);
-                await db.setVar('UPDATE_PENDING', ctx.from);
-                setTimeout(() => process.exit(0), 1000);
-            });
+            const { q, reply } = ctx;
+            const args = q.trim().split(/ +/);
+            const action = args[0]?.toLowerCase();
+
+            if (!action || action === 'check') {
+                await reply(`_⏳ Recherche de mises à jour en cours..._`);
+                exec('git fetch origin main && git log HEAD..origin/main --oneline', async (error, stdout) => {
+                    const output = stdout ? stdout.trim() : '';
+                    if (!output) {
+                        return await reply(`*✅ Système à jour*\n_Aucune nouvelle mise à jour n'est disponible._`);
+                    }
+                    const commits = output.split('\n');
+                    let msg = `*🔄 MISES À JOUR DISPONIBLES (${commits.length})*\n\n`;
+                    commits.slice(0, 10).forEach(c => {
+                        msg += `> ${c}\n`;
+                    });
+                    if (commits.length > 10) msg += `> ...et ${commits.length - 10} autres.\n`;
+                    msg += `\n_Pour installer ces mises à jour, tapez :_ \`.update apply\``;
+                    await reply(msg);
+                });
+                return;
+            }
+
+            if (action === 'apply' || action === 'now') {
+                await reply(`_⏳ Synchronisation pure et dure avec GitHub..._`);
+                exec('git fetch origin main && git reset --hard origin/main', async (error, stdout, stderr) => {
+                    const output = stdout ? stdout.trim() : (stderr ? stderr.trim() : '');
+                    if (error) {
+                        return await reply(`*❌ ERREUR LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
+                    }
+                    await reply(`*✅ MISE À JOUR TERMINÉE*\n_Le système va redémarrer dans 5 secondes pour appliquer les changements._`);
+                    await db.setVar('UPDATE_PENDING', ctx.from);
+                    setTimeout(() => process.exit(0), 1000);
+                });
+                return;
+            }
+
+            if (action === 'revert' || action === 'rollback') {
+                const target = args[1] || 'HEAD~1';
+                await reply(`_⏳ Restauration vers l'état : ${target}..._`);
+                exec(`git reset --hard ${target}`, async (error, stdout, stderr) => {
+                    const output = stdout ? stdout.trim() : (stderr ? stderr.trim() : '');
+                    if (error) {
+                        return await reply(`*❌ ERREUR LORS DE LA RESTAURATION*\n\n\`\`\`${output}\`\`\``);
+                    }
+                    await reply(`*🔙 RESTAURATION RÉUSSIE*\n\n\`\`\`${output}\`\`\`\n\n_Redémarrage en cours (5s)..._`);
+                    await db.setVar('UPDATE_PENDING', ctx.from);
+                    setTimeout(() => process.exit(0), 1000);
+                });
+                return;
+            }
+
+            await reply(`_⚠️ Option invalide.\nUtilisation : \`.update check\`, \`.update apply\`, ou \`.update revert <commit>\`_`);
         }
     },
     {
