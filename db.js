@@ -122,19 +122,46 @@ async function getVar(key, defaultValue = null) {
     return row ? row.value : defaultValue;
 }
 
-// ── Exceptions (groupes ou users ignorés) ──
+// ── Paramètres de session (isolés par instance) ──
+// Clé stockée sous la forme "<sessionId>:<key>"
+// Avec fallback vers la clé globale si pas de valeur de session
 
-async function getExceptions() {
-    const rows = await db.all('SELECT jid FROM exceptions');
-    return rows.map(r => r.jid);
+async function setSessionVar(sessionId, key, value) {
+    const sessionKey = `${sessionId}:${key}`;
+    await db.run(`
+        INSERT INTO settings (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `, [sessionKey, value]);
 }
 
-async function addException(jid) {
-    await db.run('INSERT OR IGNORE INTO exceptions (jid) VALUES (?)', [jid]);
+async function getSessionVar(sessionId, key, defaultValue = null) {
+    const sessionKey = `${sessionId}:${key}`;
+    const row = await db.get('SELECT value FROM settings WHERE key = ?', [sessionKey]);
+    if (row) return row.value;
+    // Fallback vers clé globale
+    const globalRow = await db.get('SELECT value FROM settings WHERE key = ?', [key]);
+    return globalRow ? globalRow.value : defaultValue;
 }
 
-async function removeException(jid) {
-    await db.run('DELETE FROM exceptions WHERE jid = ?', [jid]);
+// ── Exceptions (groupes ou users ignorés par session) ──
+
+async function getExceptions(sessionId) {
+    const data = await getSessionVar(sessionId, 'EXCEPTIONS', '[]');
+    try { return JSON.parse(data); } catch(e) { return []; }
+}
+
+async function addException(sessionId, jid) {
+    const list = await getExceptions(sessionId);
+    if (!list.includes(jid)) {
+        list.push(jid);
+        await setSessionVar(sessionId, 'EXCEPTIONS', JSON.stringify(list));
+    }
+}
+
+async function removeException(sessionId, jid) {
+    let list = await getExceptions(sessionId);
+    list = list.filter(item => item !== jid);
+    await setSessionVar(sessionId, 'EXCEPTIONS', JSON.stringify(list));
 }
 
 // ── Avertissements ──
@@ -157,19 +184,25 @@ async function resetWarnings(jid, chatJid) {
     await db.run('DELETE FROM warnings WHERE jid = ? AND chatJid = ?', [jid, chatJid]);
 }
 
-// ── Blacklist de Mots ──
+// ── Blacklist (mots interdits par session) ──
 
-async function addBlacklistWord(word) {
-    await db.run('INSERT OR IGNORE INTO blacklist (word) VALUES (?)', [word.toLowerCase()]);
+async function getBlacklistWords(sessionId) {
+    const data = await getSessionVar(sessionId, 'BLACKLIST', '[]');
+    try { return JSON.parse(data); } catch(e) { return []; }
 }
 
-async function removeBlacklistWord(word) {
-    await db.run('DELETE FROM blacklist WHERE word = ?', [word.toLowerCase()]);
+async function addBlacklistWord(sessionId, word) {
+    const list = await getBlacklistWords(sessionId);
+    if (!list.includes(word)) {
+        list.push(word);
+        await setSessionVar(sessionId, 'BLACKLIST', JSON.stringify(list));
+    }
 }
 
-async function getBlacklistWords() {
-    const rows = await db.all('SELECT word FROM blacklist');
-    return rows.map(r => r.word);
+async function removeBlacklistWord(sessionId, word) {
+    let list = await getBlacklistWords(sessionId);
+    list = list.filter(w => w !== word);
+    await setSessionVar(sessionId, 'BLACKLIST', JSON.stringify(list));
 }
 
 module.exports = {
@@ -180,6 +213,8 @@ module.exports = {
     getGlobalTopUsers,
     setVar,
     getVar,
+    getSessionVar,
+    setSessionVar,
     getExceptions,
     addException,
     removeException,

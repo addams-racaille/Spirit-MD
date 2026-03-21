@@ -4,6 +4,7 @@ const db = require('../db');
 
 module.exports = async (sock, msg) => {
     try {
+        const sessionId = sock.customSessionId || 'master';
         if (!msg.message) return;
 
         const isViewOnce = msg.message.viewOnceMessage || 
@@ -12,7 +13,7 @@ module.exports = async (sock, msg) => {
 
         if (!isViewOnce) return;
 
-        const antiVvStatus = await db.getVar('ANTI_VV', 'off');
+        const antiVvStatus = await db.getSessionVar(sessionId, 'ANTI_VV', 'off');
         if (antiVvStatus === 'off') return;
 
         let targetJid = msg.key.remoteJid;
@@ -21,7 +22,7 @@ module.exports = async (sock, msg) => {
                 ? `${sock.customOwner}@s.whatsapp.net`
                 : `${config.OWNER_NUMBER}@s.whatsapp.net`;
         } else if (antiVvStatus === 'custom') {
-            const customJid = await db.getVar('ANTI_VV_JID', '');
+            const customJid = await db.getSessionVar(sessionId, 'ANTI_VV_JID', '');
             if (customJid) targetJid = customJid;
         }
 

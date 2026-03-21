@@ -46,8 +46,8 @@ module.exports = async (sock, msg, messageCache) => {
     const handleAntiViewOnce = require('./antiViewOnce');
     handleAntiViewOnce(sock, msg).catch(() => {});
 
-    // Auto-read verification
-    const autoReadStatus = await db.getVar('AUTO_READ', 'off');
+    // Auto-read verification (par session)
+    const autoReadStatus = await db.getSessionVar(sessionId, 'AUTO_READ', 'off');
     if (autoReadStatus === 'on' && msg.key.remoteJid !== 'status@broadcast') {
         sock.readMessages([msg.key]).catch(() => {});
     }
@@ -57,7 +57,7 @@ module.exports = async (sock, msg, messageCache) => {
     // Modération Automatique (Groupes)
     if (from.endsWith('@g.us') && body && !isFromMe) {
         const participant = msg.key.participant || from;
-        const exceptions = await db.getExceptions();
+        const exceptions = await db.getExceptions(sessionId);
         
         if (participant !== `${sock.customOwner || config.OWNER_NUMBER}@s.whatsapp.net` && !exceptions.includes(participant)) {
             
@@ -70,7 +70,7 @@ module.exports = async (sock, msg, messageCache) => {
             // S'il n'est pas admin, on applique les filtres
             if (!isSenderAdmin) {
                 // 1. Anti-Link (Bloque TOUS les liens)
-                const isAntiLink = await db.getVar('ANTI_LINK', 'off');
+                const isAntiLink = await db.getSessionVar(sessionId, 'ANTI_LINK', 'off');
                 if (isAntiLink === 'on') {
                     const linkRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)|wa\.me|chat\.whatsapp\.com/gi;
                     if (linkRegex.test(body)) {
@@ -82,8 +82,8 @@ module.exports = async (sock, msg, messageCache) => {
                     }
                 }
 
-                // 2. Blacklist de mots
-                const blacklisted = await db.getBlacklistWords();
+                // 2. Blacklist de mots (par session)
+                const blacklisted = await db.getBlacklistWords(sessionId);
                 const bodyLower = body.toLowerCase();
                 const foundWord = blacklisted.find(w => bodyLower.includes(w));
                 if (foundWord) {
@@ -112,7 +112,7 @@ module.exports = async (sock, msg, messageCache) => {
             console.log(chalk.blue(`[CMD][${sessionId}] ${pushName}: ${body}`));
             
             try {
-                const currentMode = await db.getVar('MODE', 'public');
+                const currentMode = await db.getSessionVar(sessionId, 'MODE', 'public');
                 const senderJid = msg.key.participant || msg.key.remoteJid;
                 const ownerNumberStr = sock.customOwner || config.OWNER_NUMBER || '';
                 const isOwner = isFromMe || senderJid === `${ownerNumberStr}@s.whatsapp.net`;
@@ -147,10 +147,25 @@ module.exports = async (sock, msg, messageCache) => {
                     }
                 };
 
+                // Helpers de paramètres isolés par session
+                // ctx.getVar('MODE', 'public') lit 'master:MODE' ou 'client1:MODE'
+                const getVar = (key, def) => db.getSessionVar(sessionId, key, def);
+                const setVar = (key, val) => db.setSessionVar(sessionId, key, val);
+                
+                const getExceptions = () => db.getExceptions(sessionId);
+                const addException = (jid) => db.addException(sessionId, jid);
+                const removeException = (jid) => db.removeException(sessionId, jid);
+                
+                const getBlacklistWords = () => db.getBlacklistWords(sessionId);
+                const addBlacklistWord = (word) => db.addBlacklistWord(sessionId, word);
+                const removeBlacklistWord = (word) => db.removeBlacklistWord(sessionId, word);
+
                 const ctx = {
                     sock, msg, commandName, q, args, from, messageCache,
                     isOwner, isMasterAdmin, currentMode, reply, editMsg, pushName, sessionId,
-                    currentPrefix
+                    currentPrefix, getVar, setVar,
+                    getExceptions, addException, removeException,
+                    getBlacklistWords, addBlacklistWord, removeBlacklistWord
                 };
 
                 await cmd.execute(ctx);

@@ -17,6 +17,7 @@ function getBody(msg) {
 }
 
 module.exports = async function handleAntiEdit(sock, msg, messageCache) {
+    const sessionId = sock.customSessionId || 'master';
     const proto = msg.message?.protocolMessage;
     // type 14 = MESSAGE_EDIT
     if (!proto || (proto.type !== 14 && proto.type !== 'MESSAGE_EDIT')) return;
@@ -25,8 +26,8 @@ module.exports = async function handleAntiEdit(sock, msg, messageCache) {
     const cached = editedId ? messageCache.get(editedId) : null;
     
     if (cached) {
-        // Vérifier les paramètres utilisateur (off, chat, sudo, custom JID)
-        const antiEditMode = await db.getVar('ANTI_EDIT', 'chat');
+        // Vérifier les paramètres utilisateur (off, chat, sudo, custom JID) (par session)
+        const antiEditMode = await db.getSessionVar(sessionId, 'ANTI_EDIT', 'chat');
         if (antiEditMode === 'off') return;
 
         const originalChat = cached.key.remoteJid;
@@ -37,8 +38,8 @@ module.exports = async function handleAntiEdit(sock, msg, messageCache) {
         const { OWNER_NUMBER } = require('../config');
         if (OWNER_NUMBER && contactId === OWNER_NUMBER) return;
 
-        // 2. Ignorer les exceptions (numéro ou groupe entier)
-        const exceptions = await db.getExceptions();
+        // 2. Ignorer les exceptions (numéro ou groupe entier, par session)
+        const exceptions = await db.getExceptions(sessionId);
         if (exceptions.includes(originalChat) || exceptions.includes(originalSender)) return;
         
         const oldBody = getBody(cached) || '[Message non textuel]';
@@ -58,7 +59,7 @@ module.exports = async function handleAntiEdit(sock, msg, messageCache) {
                 targetJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
             }
         } else if (antiEditMode === 'custom') {
-            const customJid = await db.getVar('ANTI_EDIT_JID', '');
+            const customJid = await db.getSessionVar(sessionId, 'ANTI_EDIT_JID', '');
             if (customJid) targetJid = customJid;
         }
         

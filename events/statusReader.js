@@ -2,10 +2,11 @@ const chalk = require('chalk');
 const db = require('../db');
 
 module.exports = async function handleStatus(sock, msg) {
+    const sessionId = sock.customSessionId || 'master';
     const from = msg.key.remoteJid;
     if (from !== 'status@broadcast') return;
 
-    const statusMode = await db.getVar('AUTO_STATUS', 'like');
+    const statusMode = await db.getSessionVar(sessionId, 'AUTO_STATUS', 'like');
     if (statusMode === 'off') return;
 
     const pushName = msg.pushName || 'Inconnu';

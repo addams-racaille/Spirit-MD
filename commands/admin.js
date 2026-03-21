@@ -8,15 +8,15 @@ module.exports = [
         adminOnly: true,
         execute: async (ctx) => {
             const { reply } = ctx;
-            const currentMode = await db.getVar('MODE', 'public');
-            const antiDeleteMode = await db.getVar('ANTI_DELETE', 'chat');
-            const antiEditMode = await db.getVar('ANTI_EDIT', 'chat');
-            const autoStatusMode = await db.getVar('AUTO_STATUS', 'like');
-            const antilink = await db.getVar('ANTI_LINK', 'off');
-            const exceptionsList = await db.getExceptions();
-            const blacklisted = await db.getBlacklistWords();
-            const antiVvMode = await db.getVar('ANTI_VV', 'off');
-            const autoReadMode = await db.getVar('AUTO_READ', 'off');
+            const currentMode = await ctx.getVar('MODE', 'public');
+            const antiDeleteMode = await ctx.getVar('ANTI_DELETE', 'chat');
+            const antiEditMode = await ctx.getVar('ANTI_EDIT', 'chat');
+            const autoStatusMode = await ctx.getVar('AUTO_STATUS', 'like');
+            const antilink = await ctx.getVar('ANTI_LINK', 'off');
+            const exceptionsList = await ctx.getExceptions();
+            const blacklisted = await ctx.getBlacklistWords();
+            const antiVvMode = await ctx.getVar('ANTI_VV', 'off');
+            const autoReadMode = await ctx.getVar('AUTO_READ', 'off');
 
             let txt = `╔════════════════════════╗\n`;
             txt += `║ ⚙️ *PANNEAU DE CONFIGURATION* ⚙️ ║\n`;
@@ -152,7 +152,7 @@ module.exports = [
             }
 
             if (action === 'list') {
-                const exceptionsList = await db.getExceptions();
+                const exceptionsList = await ctx.getExceptions();
                 if (exceptionsList.length === 0) return await reply(`_Aucune exception configurée._`);
                 let msgText = `*Liste des Exceptions :*\n\n`;
                 exceptionsList.forEach(e => msgText += `- ${e}\n`);
@@ -164,10 +164,10 @@ module.exports = [
             }
 
             if (action === 'add') {
-                await db.addException(target);
+                await ctx.addException(target);
                 return await reply(`_✅ Ajouté aux exceptions : ${target}_`);
             } else if (action === 'remove') {
-                await db.removeException(target);
+                await ctx.removeException(target);
                 return await reply(`_❌ Retiré des exceptions : ${target}_`);
             } else {
                 return await reply(`_Action invalide._`);
@@ -182,7 +182,7 @@ module.exports = [
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
-            const currentStatus = await db.getVar('AUTO_STATUS', 'like');
+            const currentStatus = await ctx.getVar('AUTO_STATUS', 'like');
 
             if (!target) {
                 const p = ctx.currentPrefix || '.';
@@ -196,7 +196,7 @@ module.exports = [
             }
 
             if (['like', 'view', 'off'].includes(target)) {
-                await db.setVar('AUTO_STATUS', target);
+                await ctx.setVar('AUTO_STATUS', target);
                 const emoji = target === 'like' ? '💚' : target === 'view' ? '👀' : '❌';
                 return await reply(`_✅ Auto-Status configuré sur : ${target} ${emoji}_`);
             } else {
@@ -213,10 +213,10 @@ module.exports = [
             const { q, reply } = ctx;
             const newMode = q.toLowerCase().trim();
             if (newMode === 'public' || newMode === 'private') {
-                await db.setVar('MODE', newMode);
+                await ctx.setVar('MODE', newMode);
                 return await reply(`_✅ Le mode du bot a été défini sur : *${newMode}*_`);
             } else {
-                const currentMode = await db.getVar('MODE', 'public');
+                const currentMode = await ctx.getVar('MODE', 'public');
                 const p = ctx.currentPrefix || '.';
                 return await reply(`_*Mode manager*_\n_Mode actuel : ${currentMode}_\n_Utilisation : \`${p}mode public|private\`_`);
             }
@@ -230,7 +230,7 @@ module.exports = [
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
-            const currentStatus = await db.getVar('ANTI_DELETE', 'chat');
+            const currentStatus = await ctx.getVar('ANTI_DELETE', 'chat');
 
             if (!target) {
                 const p = ctx.currentPrefix || '.';
@@ -245,23 +245,23 @@ module.exports = [
             }
 
             if (target === 'off') {
-                await db.setVar('ANTI_DELETE', 'off');
-                await db.setVar('ANTI_DELETE_JID', '');
+                await ctx.setVar('ANTI_DELETE', 'off');
+                await ctx.setVar('ANTI_DELETE_JID', '');
                 return await reply(`_Anti-delete désactivé ❌_`);
             } else if (target === 'chat') {
-                await db.setVar('ANTI_DELETE', 'chat');
-                await db.setVar('ANTI_DELETE_JID', '');
+                await ctx.setVar('ANTI_DELETE', 'chat');
+                await ctx.setVar('ANTI_DELETE_JID', '');
                 return await reply(`_Anti-delete activé ✅ (chat d'origine)_`);
             } else if (target === 'sudo') {
-                await db.setVar('ANTI_DELETE', 'sudo');
-                await db.setVar('ANTI_DELETE_JID', '');
+                await ctx.setVar('ANTI_DELETE', 'sudo');
+                await ctx.setVar('ANTI_DELETE_JID', '');
                 return await reply(`_Anti-delete activé ✅ (sudo)_`);
             } else if (target.includes('@')) {
                 if (!target.match(/^\d+@(s\.whatsapp\.net|g\.us)$/)) {
                     return await reply(`_Format de numéro invalide !_`);
                 }
-                await db.setVar('ANTI_DELETE', 'custom');
-                await db.setVar('ANTI_DELETE_JID', target);
+                await ctx.setVar('ANTI_DELETE', 'custom');
+                await ctx.setVar('ANTI_DELETE_JID', target);
                 return await reply(`_Anti-delete activé ✅ (${target})_`);
             } else {
                 return await reply(`_Option invalide. Tapez \`.antidelete\` pour voir l'aide._`);
@@ -276,7 +276,7 @@ module.exports = [
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
-            const currentStatus = await db.getVar('ANTI_EDIT', 'chat');
+            const currentStatus = await ctx.getVar('ANTI_EDIT', 'chat');
 
             if (!target) {
                 const p = ctx.currentPrefix || '.';
@@ -291,23 +291,23 @@ module.exports = [
             }
 
             if (target === 'off') {
-                await db.setVar('ANTI_EDIT', 'off');
-                await db.setVar('ANTI_EDIT_JID', '');
+                await ctx.setVar('ANTI_EDIT', 'off');
+                await ctx.setVar('ANTI_EDIT_JID', '');
                 return await reply(`_Anti-edit désactivé ❌_`);
             } else if (target === 'chat') {
-                await db.setVar('ANTI_EDIT', 'chat');
-                await db.setVar('ANTI_EDIT_JID', '');
+                await ctx.setVar('ANTI_EDIT', 'chat');
+                await ctx.setVar('ANTI_EDIT_JID', '');
                 return await reply(`_Anti-edit activé ✅ (chat d'origine)_`);
             } else if (target === 'sudo') {
-                await db.setVar('ANTI_EDIT', 'sudo');
-                await db.setVar('ANTI_EDIT_JID', '');
+                await ctx.setVar('ANTI_EDIT', 'sudo');
+                await ctx.setVar('ANTI_EDIT_JID', '');
                 return await reply(`_Anti-edit activé ✅ (sudo)_`);
             } else if (target.includes('@')) {
                 if (!target.match(/^\d+@(s\.whatsapp\.net|g\.us)$/)) {
                     return await reply(`_Format de numéro invalide !_`);
                 }
-                await db.setVar('ANTI_EDIT', 'custom');
-                await db.setVar('ANTI_EDIT_JID', target);
+                await ctx.setVar('ANTI_EDIT', 'custom');
+                await ctx.setVar('ANTI_EDIT_JID', target);
                 return await reply(`_Anti-edit activé ✅ (${target})_`);
             } else {
                 return await reply(`_Option invalide. Tapez \`.antiedit\` pour voir l'aide._`);
@@ -323,12 +323,12 @@ module.exports = [
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();
             if (!target) {
-                const current = await db.getVar('ANTI_LINK', 'off');
+                const current = await ctx.getVar('ANTI_LINK', 'off');
                 const p = ctx.currentPrefix || '.';
                 return await reply(`_*Anti-Link*_\n_Supprime automatiquement ABSOLUMENT tous les liens dans les groupes (tol\u00e9rance z\u00e9ro)_\n\n_Statut actuel : ${current}_\n\n\`${p}antilink on\` \u2014 activer\n\`${p}antilink off\` \u2014 d\u00e9sactiver`);
             }
             if (target === 'on' || target === 'off') {
-                await db.setVar('ANTI_LINK', target);
+                await ctx.setVar('ANTI_LINK', target);
                 return await reply(`_Anti-link ${target === 'on' ? 'activé (Tolérance zéro) ✅' : 'désactivé ❌'}_`);
             }
             return await reply(`_Option invalide : \`on\` ou \`off\`_`);
@@ -346,13 +346,13 @@ module.exports = [
             const word = args.slice(1).join(' ').toLowerCase();
 
             if (action === 'add' && word) {
-                await db.addBlacklistWord(word);
+                await ctx.addBlacklistWord(word);
                 return await reply(`_✅ Le mot "${word}" a été ajouté à la blacklist._`);
             } else if (action === 'remove' && word) {
-                await db.removeBlacklistWord(word);
+                await ctx.removeBlacklistWord(word);
                 return await reply(`_✅ Le mot "${word}" a été retiré de la blacklist._`);
             } else if (action === 'list') {
-                const words = await db.getBlacklistWords();
+                const words = await ctx.getBlacklistWords();
                 if (words.length === 0) return await reply(`_La blacklist est vide._`);
                 return await reply(`_*Mots Interdits :*_\n${words.map(w => `- ${w}`).join('\n')}`);
             } else {
@@ -382,7 +382,7 @@ module.exports = [
             }
             // Sauvegarde avec clef unique par instance (BOT_PREFIX_<sessionId>)
             const sessionPrefixKey = `BOT_PREFIX_${sessionId}`;
-            await db.setVar(sessionPrefixKey, newPrefix);
+            await ctx.setVar(sessionPrefixKey, newPrefix);
             await reply(`_✅ Préfixe de cette instance changé en : *${newPrefix}*_\n_Utilisation immédiate : \`${newPrefix}help\`_`);
         }
     },
@@ -395,10 +395,10 @@ module.exports = [
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();
             if (target === 'on' || target === 'off') {
-                await db.setVar('AUTO_READ', target);
+                await ctx.setVar('AUTO_READ', target);
                 return await reply(`_✅ Auto-Read (Lecture automatique des messages) ${target === 'on' ? 'ACTIVÉ' : 'DÉSACTIVÉ'}._`);
             }
-            const current = await db.getVar('AUTO_READ', 'off');
+            const current = await ctx.getVar('AUTO_READ', 'off');
             const p = ctx.currentPrefix || '.';
             return await reply(`_*Auto Read*_\n_Statut: ${current}_\n\`${p}autoread on/off\``);
         }
@@ -411,7 +411,7 @@ module.exports = [
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();
-            const currentStatus = await db.getVar('ANTI_VV', 'off');
+            const currentStatus = await ctx.getVar('ANTI_VV', 'off');
 
             if (!target) {
                 const p = ctx.currentPrefix || '.';
@@ -425,13 +425,13 @@ module.exports = [
             }
 
             if (target === 'off') {
-                await db.setVar('ANTI_VV', 'off');
+                await ctx.setVar('ANTI_VV', 'off');
                 return await reply(`_Anti-VV désactivé ❌_`);
             } else if (target === 'chat') {
-                await db.setVar('ANTI_VV', 'chat');
+                await ctx.setVar('ANTI_VV', 'chat');
                 return await reply(`_Anti-VV activé ✅ (chat d'origine)_`);
             } else if (target === 'sudo') {
-                await db.setVar('ANTI_VV', 'sudo');
+                await ctx.setVar('ANTI_VV', 'sudo');
                 return await reply(`_Anti-VV activé ✅ (sudo - MP)_`);
             } else {
                 return await reply(`_Option invalide._`);
