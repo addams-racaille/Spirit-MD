@@ -217,7 +217,7 @@ module.exports = [
                 exec('git fetch origin main && git log HEAD..origin/main --oneline', async (error, stdout) => {
                     const output = stdout ? stdout.trim() : '';
                     if (!output) {
-                        return await reply(`*✅ Système à jour*\n_Aucune nouvelle mise à jour n'est disponible._`);
+                        return await reply(`*✅ Système à jour*\n_Aucune nouvelle mise à jour n'est disponible._\n\n_Tu peux voir l'historique avec_ \`.update list\``);
                     }
                     const commits = output.split('\n');
                     let msg = `*🔄 MISES À JOUR DISPONIBLES (${commits.length})*\n\n`;
@@ -238,20 +238,41 @@ module.exports = [
                     if (error) {
                         return await reply(`*❌ ERREUR LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
                     }
-                    await reply(`*✅ MISE À JOUR TERMINÉE*\n_Le système va redémarrer dans 5 secondes pour appliquer les changements._`);
+                    await reply(`*✅ MISE À JOUR TERMINÉE*\n_Le système va redémarrer pour appliquer les changements._`);
                     await db.setVar('UPDATE_PENDING', ctx.from);
                     setTimeout(() => process.exit(0), 1000);
                 });
                 return;
             }
 
+            if (action === 'list' || action === 'history') {
+                await reply(`_⏳ Récupération de l'historique des versions..._`);
+                exec('git log -n 15 --oneline', async (error, stdout) => {
+                    const output = stdout ? stdout.trim() : '';
+                    if (!output || error) {
+                        return await reply(`*❌ Impossible de lire l'historique Git.*`);
+                    }
+                    let msg = `*📜 HISTORIQUE DES VERSIONS (15 max)*\n\n`;
+                    output.split('\n').forEach(c => {
+                        const id = c.substring(0, 7);
+                        const desc = c.substring(8);
+                        msg += `> 🆔 \`${id}\` : ${desc}\n`;
+                    });
+                    msg += `\n_Pour revenir à une ancienne version, tapez :_ \`.update revert <ID>\``;
+                    await reply(msg);
+                });
+                return;
+            }
+
             if (action === 'revert' || action === 'rollback') {
-                const target = args[1] || 'HEAD~1';
-                await reply(`_⏳ Restauration vers l'état : ${target}..._`);
+                const target = args[1];
+                if (!target) return await reply(`_⚠️ Veuillez fournir un ID de mise à jour. (Ex: \`.update revert a1b2c3d\`)\n\nUtilisez \`.update list\` pour voir les IDs._`);
+                
+                await reply(`_⏳ Restauration forcée vers la version : ${target}..._`);
                 exec(`git reset --hard ${target}`, async (error, stdout, stderr) => {
                     const output = stdout ? stdout.trim() : (stderr ? stderr.trim() : '');
                     if (error) {
-                        return await reply(`*❌ ERREUR LORS DE LA RESTAURATION*\n\n\`\`\`${output}\`\`\``);
+                        return await reply(`*❌ CIBLE INTROUVABLE / ERREUR*\n\n\`\`\`${output}\`\`\``);
                     }
                     await reply(`*🔙 RESTAURATION RÉUSSIE*\n\n\`\`\`${output}\`\`\`\n\n_Redémarrage en cours (5s)..._`);
                     await db.setVar('UPDATE_PENDING', ctx.from);
@@ -260,7 +281,7 @@ module.exports = [
                 return;
             }
 
-            await reply(`_⚠️ Option invalide.\nUtilisation : \`.update check\`, \`.update apply\`, ou \`.update revert <commit>\`_`);
+            await reply(`_⚠️ Option invalide.\nUtilisation :\n- \`.update check\` (Vérifie les maj)\n- \`.update apply\` (Installe)\n- \`.update list\` (Historique)\n- \`.update revert <ID>\` (Retour en arrière)_`);
         }
     },
     {
