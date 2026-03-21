@@ -111,8 +111,9 @@ module.exports = [
         execute: async (ctx) => {
             const { q, sock, from, reply } = ctx;
             const parts = q.split('|').map(s => s.trim()).filter(Boolean);
+            const p = ctx.currentPrefix || '.';
             if (parts.length < 3) {
-                return await reply(`_Utilisation : \`.poll Question|Option1|Option2\`_`);
+                return await reply(`_Utilisation : \`${p}poll Question|Option1|Option2\`_`);
             }
             const [question, ...options] = parts;
             await sock.sendMessage(from, {
@@ -130,7 +131,8 @@ module.exports = [
         usage: '.calc <1+2*8>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_Utilisation : \`.calc 2+2*5\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Utilisation : \`${p}calc 2+2*5\`_`);
             try {
                 const sanitized = q.replace(/[^0-9+\-*/().,\s%^]/g, '');
                 if (sanitized !== q.replace(/\s/g, '')) return await reply(`_❌ Expression invalide ou non-autorisée._`);
@@ -148,7 +150,8 @@ module.exports = [
         usage: '.wiki <terme de recherche>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_Utilisation : \`.wiki <sujet>\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Utilisation : \`${p}wiki <sujet>\`_`);
             try {
                 const res = await axios.get(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`, {
                     headers: { 'User-Agent': 'WhatsAppBot/1.0 (bot@example.com)' }
@@ -170,10 +173,11 @@ module.exports = [
         usage: '.translate <code de langue> <votre texte>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
+            const p = ctx.currentPrefix || '.';
             const parts = q.split(' ');
             const lang = parts[0];
             const text = parts.slice(1).join(' ');
-            if (!lang || !text) return await reply(`_Utilisation : \`.translate en Bonjour monde\`_\n_Codes : fr, en, es, de, ar, pt, ru..._`);
+            if (!lang || !text) return await reply(`_Utilisation : \`${p}translate en Bonjour monde\`_\n_Codes : fr, en, es, de, ar, pt, ru..._`);
             try {
                 const res = await axios.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${lang}`);
                 const translation = res.data.responseData.translatedText;
@@ -191,10 +195,11 @@ module.exports = [
         usage: '.remind <durée(10m/3h)> <texte rappelé>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
+            const p = ctx.currentPrefix || '.';
             const parts = q.split(' ');
             const delayStr = parts[0]; 
             const message = parts.slice(1).join(' ');
-            if (!delayStr || !message) return await reply(`_Utilisation : \`.remind 30m penser à appeler\`_\n_Unités : m (minutes), h (heures)_`);
+            if (!delayStr || !message) return await reply(`_Utilisation : \`${p}remind 30m penser à appeler\`_\n_Unités : m (minutes), h (heures)_`);
             const match = delayStr.match(/^(\d+)(m|h)$/i);
             if (!match) return await reply(`_Format invalide. Ex: 30m ou 2h_`);
             const ms = parseInt(match[1]) * (match[2].toLowerCase() === 'h' ? 3600000 : 60000);
@@ -212,7 +217,8 @@ module.exports = [
         usage: '.weather <Paris/Montreal/etc>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_Veuillez indiquer une ville. Ex: \`.météo Paris\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Veuillez indiquer une ville. Ex: \`${p}météo Paris\`_`);
             try {
                 const res = await axios.get(`https://wttr.in/${encodeURIComponent(q)}?format=%l:+%C+%t+(Ressenti:+%f)\n💧+Humidité:+%h\n💨+Vent:+%w`);
                 await reply(`🌤️ *Météo* :\n\n${res.data}`);
@@ -228,7 +234,8 @@ module.exports = [
         usage: '.qr <URL ou donnée brute>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
-            if (!q) return await reply(`_Indiquez un texte ou un lien. Ex: \`.qr Coucou\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Indiquez un texte ou un lien. Ex: \`${p}qr Coucou\`_`);
             try {
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(q)}`;
                 await sock.sendMessage(from, { image: { url: qrUrl }, caption: `_📱 QRCode généré pour :_ ${q}` }, { quoted: msg });
@@ -241,13 +248,14 @@ module.exports = [
         usage: '.tts [langue] <texte libre>',
         execute: async (ctx) => {
             const { q, args, sock, from, msg, reply } = ctx;
+            const p = ctx.currentPrefix || '.';
             let lang = 'fr';
             let text = q;
             if (args[0]?.length === 2 && args.length > 1) { 
                 lang = args[0];
                 text = args.slice(1).join(' ');
             }
-            if (!text) return await reply(`_Texte manquant. Ex: \`.tts fr Bonjour\`_`);
+            if (!text) return await reply(`_Texte manquant. Ex: \`${p}tts fr Bonjour\`_`);
             try {
                 const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${lang}&q=${encodeURIComponent(text)}`;
                 await sock.sendMessage(from, { audio: { url: ttsUrl }, mimetype: 'audio/mpeg', ptt: true }, { quoted: msg });
@@ -261,7 +269,8 @@ module.exports = [
         usage: '.short <lien immensément long>',
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q || !q.startsWith('http')) return await reply(`_Lien invalide. Ex: \`.short https://exemple.com\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q || !q.startsWith('http')) return await reply(`_Lien invalide. Ex: \`${p}short https://exemple.com\`_`);
             try {
                 const res = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(q)}`);
                 await reply(`_🔗 Lien raccourci :_ ${res.data}`);
@@ -274,7 +283,8 @@ module.exports = [
         usage: '.github <pseudo de developpeur>',
         execute: async (ctx) => {
             const { q, sock, from, msg, reply } = ctx;
-            if (!q) return await reply(`_Indiquez un username. Ex: \`.github torvalds\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Indiquez un username. Ex: \`${p}github torvalds\`_`);
             try {
                 const res = await axios.get(`https://api.github.com/users/${encodeURIComponent(q)}`);
                 const user = res.data;

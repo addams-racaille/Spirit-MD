@@ -136,7 +136,8 @@ module.exports = [
             else if (quotedMsg?.videoMessage || msg.message?.videoMessage) type = 'video';
 
             if (!mediaMessage) {
-                return await reply(`_Veuillez répondre à une image ou une vidéo avec \`.${commandName}\`_`);
+                const pfx = ctx.currentPrefix || '.';
+                return await reply(`_Veuillez répondre à une image ou une vidéo avec \`${pfx}${commandName}\`_`);
             }
 
             if (type === 'video' && mediaMessage.seconds > 10) {
@@ -210,7 +211,8 @@ module.exports = [
             const quotedMsg = context?.quotedMessage;
 
             if (!quotedMsg) {
-                return await reply(`_Réponds à un message en vue unique avec \`.vv\`_`);
+                const p = ctx.currentPrefix || '.';
+                return await reply(`_Réponds à un message en vue unique avec \`${p}vv\`_`);
             }
 
             const voWrappers = [

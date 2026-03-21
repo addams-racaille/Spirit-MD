@@ -32,7 +32,8 @@ module.exports = [
         desc: 'Calcule sérieusement (ou pas) les affinités amoureuses entre deux personnes.',
         usage: '.love <Nom1> <Nom2>',
         execute: async (ctx) => {
-            if (ctx.args.length < 2) return await ctx.reply(`_Utilisation : \`.love Roméo Juliette\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (ctx.args.length < 2) return await ctx.reply(`_Utilisation : \`${p}love Roméo Juliette\`_`);
             const score = Math.floor(Math.random() * 101);
             let emoji = score > 80 ? '💖' : score > 50 ? '💕' : score > 20 ? '💔' : '☠️';
             await ctx.reply(`🔮 *Amour* : ${ctx.args[0]} + ${ctx.args.slice(1).join(' ')} = *${score}%* ${emoji}`);
@@ -57,7 +58,8 @@ module.exports = [
         desc: 'Posez une question existentielle à la boule de voyance qui dit tout.',
         usage: '.8ball <Ta Question Difficile>',
         execute: async (ctx) => {
-            if (!ctx.q) return await ctx.reply(`_Pose-moi une question ! (ex: \`.8ball Vais-je réussir ?\`)_`);
+            const p = ctx.currentPrefix || '.';
+            if (!ctx.q) return await ctx.reply(`_Pose-moi une question ! (ex: \`${p}8ball Vais-je réussir ?\`)_`);
             const answers = ["Absolument.", "C'est certain.", "Sans aucun doute.", "Très probable.", "Oui.", "Réponse floue, réessaie.", "Demande plus tard.", "Mieux vaut ne pas te le dire maintenant.", "N'y compte pas.", "Ma réponse est non.", "Mes sources disent non.", "Très douteux."];
             await ctx.reply(`🎱 *La boule magique dit :*\n${answers[Math.floor(Math.random() * answers.length)]}`);
         }
@@ -150,7 +152,8 @@ module.exports = [
         desc: 'Battez le bot intelligent au célèbre Pierre-Feuille-Ciseaux.',
         usage: '.rps <pierre|feuille|ciseaux>',
         execute: async (ctx) => {
-            if (!ctx.args[0]) return await ctx.reply(`_Choisis : \`.rps pierre\`, \`.rps feuille\` ou \`.rps ciseaux\`_`);
+            const pfx = ctx.currentPrefix || '.';
+            if (!ctx.args[0]) return await ctx.reply(`_Choisis : \`${pfx}rps pierre\`, \`${pfx}rps feuille\` ou \`${pfx}rps ciseaux\`_`);
             const p = ctx.args[0].toLowerCase();
             if (!['pierre','feuille','ciseaux'].includes(p)) return;
             const b = ['pierre','feuille','ciseaux'][Math.floor(Math.random() * 3)];

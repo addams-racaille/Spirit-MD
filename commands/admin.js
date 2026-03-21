@@ -138,12 +138,13 @@ module.exports = [
             const target = args[1];
 
             if (!action || (action !== 'list' && !target)) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
                     `_*Exceptions Manager*_\n_Ignore l'Anti-Delete et l'Anti-Edit pour certains chats_\n\n` +
                     `_Utilisation :_\n` +
-                    `\`.except add <jid>\` - Ajouter une exception\n` +
-                    `\`.except remove <jid>\` - Retirer une exception\n` +
-                    `\`.except list\` - Voir les exceptions\n\n` +
+                    `\`${p}except add <jid>\` - Ajouter une exception\n` +
+                    `\`${p}except remove <jid>\` - Retirer une exception\n` +
+                    `\`${p}except list\` - Voir les exceptions\n\n` +
                     `_Exemples de JID :_\n` +
                     `- Utilisateur : \`123456789@s.whatsapp.net\`\n` +
                     `- Groupe : \`123456-789@g.us\``
@@ -184,12 +185,13 @@ module.exports = [
             const currentStatus = await db.getVar('AUTO_STATUS', 'like');
 
             if (!target) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
-                    `_*Auto Status*_\n_Gère la lecture de statuts WhatsApp_\n\n` +
+                    `_*Auto Status*_\n_G\u00e8re la lecture de statuts WhatsApp_\n\n` +
                     `_Statut actuel : ${currentStatus}_\n\n_Utilisation :_\n` +
-                    `\`.autostatus like\` - lit et like (💚) automatiquement\n` +
-                    `\`.autostatus view\` - lit sans réagir\n` +
-                    `\`.autostatus off\` - désactive la fonctionnalité`
+                    `\`${p}autostatus like\` - lit et like (\uD83D\uDC9A) automatiquement\n` +
+                    `\`${p}autostatus view\` - lit sans r\u00e9agir\n` +
+                    `\`${p}autostatus off\` - d\u00e9sactive la fonctionnalit\u00e9`
                 );
             }
 
@@ -215,7 +217,8 @@ module.exports = [
                 return await reply(`_✅ Le mode du bot a été défini sur : *${newMode}*_`);
             } else {
                 const currentMode = await db.getVar('MODE', 'public');
-                return await reply(`_*Mode manager*_\n_Mode actuel : ${currentMode}_\n_Utilisation : \`.mode public|private\`_`);
+                const p = ctx.currentPrefix || '.';
+                return await reply(`_*Mode manager*_\n_Mode actuel : ${currentMode}_\n_Utilisation : \`${p}mode public|private\`_`);
             }
         }
     },
@@ -230,13 +233,14 @@ module.exports = [
             const currentStatus = await db.getVar('ANTI_DELETE', 'chat');
 
             if (!target) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
-                    `_*Anti delete*_\n_Récupère les messages supprimés et les renvoie_\n\n` +
+                    `_*Anti delete*_\n_R\u00e9cup\u00e8re les messages supprim\u00e9s et les renvoie_\n\n` +
                     `_Statut actuel : ${currentStatus}_\n\n_Utilisation :_\n` +
-                    `\`.antidelete chat\` - envoie dans le chat original\n` +
-                    `\`.antidelete sudo\` - envoie au propriétaire (sudo)\n` +
-                    `\`.antidelete <jid>\` - envoie à un numéro/groupe spécifique\n` +
-                    `\`.antidelete off\` - désactive l'anti-delete`
+                    `\`${p}antidelete chat\` - envoie dans le chat original\n` +
+                    `\`${p}antidelete sudo\` - envoie au propri\u00e9taire (sudo)\n` +
+                    `\`${p}antidelete <jid>\` - envoie \u00e0 un num\u00e9ro/groupe sp\u00e9cifique\n` +
+                    `\`${p}antidelete off\` - d\u00e9sactive l'anti-delete`
                 );
             }
 
@@ -275,13 +279,14 @@ module.exports = [
             const currentStatus = await db.getVar('ANTI_EDIT', 'chat');
 
             if (!target) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
-                    `_*Anti edit*_\n_Récupère les messages modifiés et affiche l'avant/après_\n\n` +
+                    `_*Anti edit*_\n_R\u00e9cup\u00e8re les messages modifi\u00e9s et affiche l'avant/apr\u00e8s_\n\n` +
                     `_Statut actuel : ${currentStatus}_\n\n_Utilisation :_\n` +
-                    `\`.antiedit chat\` - envoie dans le chat original\n` +
-                    `\`.antiedit sudo\` - envoie au propriétaire (sudo)\n` +
-                    `\`.antiedit <jid>\` - envoie à un numéro/groupe spécifique\n` +
-                    `\`.antiedit off\` - désactive l'anti-edit`
+                    `\`${p}antiedit chat\` - envoie dans le chat original\n` +
+                    `\`${p}antiedit sudo\` - envoie au propri\u00e9taire (sudo)\n` +
+                    `\`${p}antiedit <jid>\` - envoie \u00e0 un num\u00e9ro/groupe sp\u00e9cifique\n` +
+                    `\`${p}antiedit off\` - d\u00e9sactive l'anti-edit`
                 );
             }
 
@@ -319,7 +324,8 @@ module.exports = [
             const target = q.toLowerCase().trim();
             if (!target) {
                 const current = await db.getVar('ANTI_LINK', 'off');
-                return await reply(`_*Anti-Link*_\n_Supprime automatiquement ABSOLUMENT tous les liens dans les groupes (tolérance zéro)_\n\n_Statut actuel : ${current}_\n\n\`.antilink on\` — activer\n\`.antilink off\` — désactiver`);
+                const p = ctx.currentPrefix || '.';
+                return await reply(`_*Anti-Link*_\n_Supprime automatiquement ABSOLUMENT tous les liens dans les groupes (tol\u00e9rance z\u00e9ro)_\n\n_Statut actuel : ${current}_\n\n\`${p}antilink on\` \u2014 activer\n\`${p}antilink off\` \u2014 d\u00e9sactiver`);
             }
             if (target === 'on' || target === 'off') {
                 await db.setVar('ANTI_LINK', target);
@@ -350,7 +356,8 @@ module.exports = [
                 if (words.length === 0) return await reply(`_La blacklist est vide._`);
                 return await reply(`_*Mots Interdits :*_\n${words.map(w => `- ${w}`).join('\n')}`);
             } else {
-                return await reply(`_Utilisation :_\n\`.blacklist add <mot>\`\n\`.blacklist remove <mot>\`\n\`.blacklist list\``);
+                const p = ctx.currentPrefix || '.';
+                return await reply(`_Utilisation :_\n\`${p}blacklist add <mot>\`\n\`${p}blacklist remove <mot>\`\n\`${p}blacklist list\``);
             }
         }
     },
@@ -392,7 +399,8 @@ module.exports = [
                 return await reply(`_✅ Auto-Read (Lecture automatique des messages) ${target === 'on' ? 'ACTIVÉ' : 'DÉSACTIVÉ'}._`);
             }
             const current = await db.getVar('AUTO_READ', 'off');
-            return await reply(`_*Auto Read*_\n_Statut: ${current}_\n\`.autoread on/off\``);
+            const p = ctx.currentPrefix || '.';
+            return await reply(`_*Auto Read*_\n_Statut: ${current}_\n\`${p}autoread on/off\``);
         }
     },
     {
@@ -406,12 +414,13 @@ module.exports = [
             const currentStatus = await db.getVar('ANTI_VV', 'off');
 
             if (!target) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
-                    `_*Anti Vue-Unique*_\n_Récupère les photos/vidéos/audios éphémères_\n\n` +
+                    `_*Anti Vue-Unique*_\n_R\u00e9cup\u00e8re les photos/vid\u00e9os/audios \u00e9ph\u00e9m\u00e8res_\n\n` +
                     `_Statut actuel : ${currentStatus}_\n\n_Utilisation :_\n` +
-                    `\`.antivv chat\` - renvoie dans le chat original\n` +
-                    `\`.antivv sudo\` - envoie au propriétaire en privé\n` +
-                    `\`.antivv off\` - désactive la fonctionnalité`
+                    `\`${p}antivv chat\` - renvoie dans le chat original\n` +
+                    `\`${p}antivv sudo\` - envoie au propri\u00e9taire en priv\u00e9\n` +
+                    `\`${p}antivv off\` - d\u00e9sactive la fonctionnalit\u00e9`
                 );
             }
 

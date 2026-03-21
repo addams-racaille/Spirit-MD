@@ -74,7 +74,8 @@ module.exports = [
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_Précisez l'ID du bot à supprimer. (Ex: \`.delbot user_33612345678\`)_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Précisez l'ID du bot à supprimer. (Ex: \`${p}delbot user_33612345678\`)_`);
             const targetId = q.trim();
             if (targetId === 'master') return await reply(`_❌ Vous ne pouvez pas supprimer le bot principal._`);
             
@@ -104,7 +105,8 @@ module.exports = [
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_Format: \`.restartbot user_xxx\`_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Format: \`${p}restartbot user_xxx\`_`);
             const targetId = q.trim();
             const sessionsMap = global.activeSessions;
             if (sessionsMap && sessionsMap.has(targetId)) {
@@ -128,7 +130,8 @@ module.exports = [
         masterOnly: true,
         execute: async (ctx) => {
             const { q, sock, reply } = ctx;
-            if (!q) return await reply(`_Veuillez écrire le message à diffuser (ex: \`.bc Bonjour à tous\`)_`);
+            const p = ctx.currentPrefix || '.';
+            if (!q) return await reply(`_Veuillez écrire le message à diffuser (ex: \`${p}bc Bonjour à tous\`)_`);
             
             const sessionsMap = global.activeSessions;
             if (!sessionsMap || sessionsMap.size === 0) return await reply(`_Personne à qui envoyer._`);

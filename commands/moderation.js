@@ -45,11 +45,12 @@ module.exports = [
             const shouldKick = args[1]?.toLowerCase() === "kick";
 
             if (!durationStr) {
+                const p = ctx.currentPrefix || '.';
                 return await reply(
                     "_Utilisation (Admin/Bot) :_\n" +
-                    "• `.inactive 30d` - Voir membres inactifs (>30j)\n" +
-                    "• `.inactive 10d kick` - Expulser inactifs (>10j)\n" +
-                    "_Unités :_ d (jour), w (semaine), m (mois), y (année)"
+                    `• \`${p}inactive 30d\` - Voir membres inactifs (>30j)\n` +
+                    `• \`${p}inactive 10d kick\` - Expulser inactifs (>10j)\n` +
+                    "_Unit\u00e9s :_ d (jour), w (semaine), m (mois), y (ann\u00e9e)"
                 );
             }
 
@@ -112,7 +113,7 @@ module.exports = [
                     responseMsg += `${i+1}. @${m.jid.split('@')[0]} (${m.name})\n`;
                     responseMsg += `   _Vu : ${m.lastMessage} | Msg : ${m.totalMessages}_\n\n`;
                 }
-                responseMsg += `\n_Pour expulser: .inactive ${durationStr} kick_`;
+                responseMsg += `\n_Pour expulser: ${ctx.currentPrefix || '.'}inactive ${durationStr} kick_`;
                 await sock.sendMessage(from, { text: responseMsg, mentions: inactiveMembers.map(m => m.jid) });
             }
         }
@@ -237,7 +238,8 @@ module.exports = [
                 await sock.groupSettingUpdate(from, 'announcement');
                 await reply(`_🔒 Le groupe est fermé. Seuls les admins peuvent parler._`);
             } else {
-                await reply(`_Utilisation : \`.group open\` ou \`.group close\`_`);
+                const p = ctx.currentPrefix || '.';
+                await reply(`_Utilisation : \`${p}group open\` ou \`${p}group close\`_`);
             }
         }
     },
