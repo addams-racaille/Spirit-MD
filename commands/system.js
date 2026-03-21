@@ -1,7 +1,6 @@
 const os = require('os');
 const db = require('../db');
 const { exec } = require('child_process');
-const chalk = require('chalk');
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -15,7 +14,16 @@ function formatUptime(sec) {
     const d = Math.floor(sec / (3600 * 24));
     const h = Math.floor((sec % (3600 * 24)) / 3600);
     const m = Math.floor((sec % 3600) / 60);
-    return `${d}j ${h}h ${m}m`;
+    const s = Math.floor(sec % 60);
+    return `${d}j ${h}h ${m}m ${s}s`;
+}
+
+function makeBar(percent) {
+    const total = 12;
+    percent = Math.max(0, Math.min(100, percent));
+    const filled = Math.round((percent / 100) * total);
+    const empty = total - filled;
+    return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
 module.exports = [
@@ -23,9 +31,9 @@ module.exports = [
         name: 'ping',
         execute: async (ctx) => {
             const start = Date.now();
-            await ctx.reply('🏓 Pong ! Calcul du ping...');
+            await ctx.reply('🏓 Calcul de la latence du serveur...');
             const end = Date.now();
-            await ctx.reply(`🏓 *Pong !*\nLatence : ${end - start}ms`);
+            await ctx.reply(`🚀 *VITESSE RÉSEAU INTRA-SERVEURS*\n\n📡 Latence aller-retour : *${end - start} ms*\n_Serveur ultra-réactif._`);
         }
     },
     {
@@ -37,37 +45,58 @@ module.exports = [
             const ramUsage = process.memoryUsage().rss;
             const totalRam = os.totalmem();
             const freeRam = os.freemem();
+            const usedRam = totalRam - freeRam;
+            const ramPercent = (usedRam / totalRam) * 100;
+            const botRamPercent = (ramUsage / totalRam) * 100;
+            
             const cpus = os.cpus();
             const cpuModel = cpus[0].model;
-            const cpuSpeed = cpus[0].speed;
+            // Charge CPU (approximation via loadavg sur unix, sinon N/A)
+            const load = os.loadavg ? os.loadavg()[0] : 0;
+            const cpuPercent = cpus.length ? (load / cpus.length) * 100 : 0;
             
-            let txt = `⚙️ *INFORMATIONS SYSTÈME AVANCÉES*\n\n`;
-            txt += `🤖 *Bot:*\n`;
-            txt += ` ├ ⏱️ Uptime  : ${formatUptime(botUptime)}\n`;
-            txt += ` ├ 🧠 RAM Bot : ${formatBytes(ramUsage)}\n`;
-            txt += ` └ ⚡ Node.js : ${process.version}\n\n`;
-            txt += `🖥️ *Serveur (VPS):*\n`;
-            txt += ` ├ 💻 OS      : ${os.type()} ${os.release()} (${os.arch()})\n`;
-            txt += ` ├ ⏱️ Uptime  : ${formatUptime(osUptime)}\n`;
-            txt += ` ├ 💿 CPU     : ${cpus.length} Cores | ${cpuSpeed} MHz\n`;
-            txt += ` ├ 🏷️ Modèle  : ${cpuModel.trim()}\n`;
-            txt += ` ├ 💾 RAM Tot : ${formatBytes(totalRam)}\n`;
-            txt += ` └ 🟢 RAM Lib : ${formatBytes(freeRam)}\n`;
+            let txt = `━━━━━━━━━━━━━━━━━━━━━\n`;
+            txt += `🔥 *DASHBOARD SYSTÈME ULTIME* 🔥\n`;
+            txt += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+            
+            txt += `🤖 *PROCESSUS BOT*\n`;
+            txt += ` ⏱️ Uptime  : ${formatUptime(botUptime)}\n`;
+            txt += ` 🧠 RAM Bot : ${formatBytes(ramUsage)} \n`;
+            txt += ` 📊 Poids   : [${makeBar(botRamPercent)}] ${botRamPercent.toFixed(1)}%\n`;
+            txt += ` ⚡ Moteur   : Node.js ${process.version}\n\n`;
+            
+            txt += `🖥️ *MACHINE HÔTE (VPS)*\n`;
+            txt += ` 💻 OS      : ${os.type()} ${os.release()} (${os.arch()})\n`;
+            txt += ` ⏱️ Allumé  : ${formatUptime(osUptime)}\n`;
+            txt += ` 🏷️ CPU     : ${cpuModel.trim()}\n`;
+            txt += ` ⚙️ Coeurs  : ${cpus.length} Threads\n`;
+            if (process.platform !== 'win32') {
+                txt += ` 📈 Charge  : [${makeBar(cpuPercent)}] ${cpuPercent.toFixed(1)}%\n`;
+            }
+            txt += ` 💾 RAM Tot : ${formatBytes(totalRam)}\n`;
+            txt += ` 🟥 RAM Out : [${makeBar(ramPercent)}] ${ramPercent.toFixed(1)}%\n`;
+            txt += ` 🟢 RAM In  : ${formatBytes(freeRam)}\n\n`;
+            
+            txt += `_> "L'excellence par l'optimisation."_`;
             
             await ctx.reply(txt);
         }
     },
     {
         name: 'exec',
-        aliases: ['shell', 'cmd'],
+        aliases: ['shell', 'cmd', '$'],
         masterOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
-            if (!q) return await reply(`_⚠️ Aucune commande fournie._`);
+            if (!q) return await reply(`_⚠️ Fournis une ligne de commande (ex: \`.exec ls -la\`)_`);
             exec(q, (error, stdout, stderr) => {
-                if (error) return reply(`*❌ ERREUR*\n\`\`\`${error.message}\`\`\``);
-                if (stderr) return reply(`*⚠️ STDERR*\n\`\`\`${stderr}\`\`\``);
-                reply(`*✅ OUTPUT*\n\`\`\`${stdout}\`\`\``);
+                let txt = `💻 *TERMINAL INTÉGRÉ*\n\n`;
+                txt += `❯ \`${q}\`\n\n`;
+                if (error) txt += `*❌ ERREUR*\n\`\`\`${error.message}\`\`\`\n\n`;
+                if (stderr) txt += `*⚠️ STDERR*\n\`\`\`${stderr}\`\`\`\n\n`;
+                if (stdout) txt += `*✅ OUTPUT*\n\`\`\`${stdout}\`\`\``;
+                else txt += `_(Aucune sortie générée)_`;
+                reply(txt);
             });
         }
     },
@@ -75,9 +104,9 @@ module.exports = [
         name: 'rebootvps',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_⚠️ Redémarrage complet du VPS en cours... Le bot sera injoignable pendant quelques minutes._`);
+            await ctx.reply(`🚨 *CRITIQUE* 🚨\n\n_Redémarrage complet de la machine hôte en cours...\nDéconnexion de toutes les instances SaaS imminente._`);
             exec('sudo reboot', (err) => {
-                if (err) ctx.reply(`_❌ Impossible de redémarrer le VPS (Droits sudo requis)._`);
+                if (err) ctx.reply(`_❌ Échec de la commande (L'hôte tourne peut-être sous Windows ou sans droits sudo)._`);
             });
         }
     },
@@ -85,18 +114,18 @@ module.exports = [
         name: 'clearcache',
         masterOnly: true,
         execute: async (ctx) => {
+            const oldSize = ctx.messageCache.keys().length;
             ctx.messageCache.flushAll();
-            await ctx.reply(`_✅ Le cache des messages (NodeCache) a été vidé avec succès._`);
+            await ctx.reply(`🧹 *MAINTENANCE*\n\n_Vampirisation de la RAM stoppée._\n✅ **${oldSize}** messages fantômes ont été effacés du cache principal.`);
         }
     },
     {
         name: 'disk',
         masterOnly: true,
         execute: async (ctx) => {
-            const { os } = process.platform === 'win32' ? 'systeminfo' : 'df -h /';
             exec(process.platform === 'win32' ? 'wmic logicaldisk get size,freespace,caption' : 'df -h /', (error, stdout) => {
                 if (error) return ctx.reply(`_❌ Erreur lors de la lecture des disques._`);
-                ctx.reply(`💽 *ÉTAT DU DISQUE*\n\`\`\`\n${stdout.trim()}\n\`\`\``);
+                ctx.reply(`💽 *ANALYSE DE STOCKAGE*\n\n\`\`\`\n${stdout.trim()}\n\`\`\``);
             });
         }
     },
@@ -105,20 +134,24 @@ module.exports = [
         masterOnly: true,
         execute: async (ctx) => {
             exec('pm2 jlist', (err, stdout) => {
-                if (err) return ctx.reply(`_❌ PM2 non installé ou erreur._`);
+                if (err) return ctx.reply(`_❌ PM2 introuvable._`);
                 try {
                     const list = JSON.parse(stdout);
                     if (list.length === 0) return ctx.reply(`_Aucun processus PM2 en cours._`);
-                    let res = `📋 *PROCESSUS PM2*\n\n`;
+                    let res = `📋 *GÉRANT DE PROCESSUS (PM2)*\n`;
+                    res += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
                     list.forEach(p => {
-                        res += `*${p.name}* (ID: ${p.pm_id})\n`;
-                        res += ` ├ Statut : ${p.pm2_env.status === 'online' ? '🟢' : '🔴'} ${p.pm2_env.status}\n`;
-                        res += ` ├ CPU    : ${p.monit.cpu} %\n`;
-                        res += ` └ RAM    : ${formatBytes(p.monit.memory)}\n\n`;
+                        const statusColor = p.pm2_env.status === 'online' ? '🟢' : '🔴';
+                        res += `🤖 *${p.name.toUpperCase()}* [ID: ${p.pm_id}]\n`;
+                        res += `   État   : ${statusColor} ${p.pm2_env.status.toUpperCase()}\n`;
+                        res += `   CPU    : [${makeBar(p.monit.cpu)}] ${p.monit.cpu}%\n`;
+                        res += `   RAM    : ${formatBytes(p.monit.memory)}\n`;
+                        res += `   Uptime : ${formatUptime((Date.now() - p.pm2_env.pm_uptime)/1000)}\n`;
+                        res += `   Restarts: ${p.pm2_env.restart_time} fois\n\n`;
                     });
                     ctx.reply(res);
                 } catch (e) {
-                    ctx.reply(`_❌ Erreur de parsing PM2._`);
+                    ctx.reply(`_❌ Erreur lecture Json PM2._`);
                 }
             });
         }
@@ -127,9 +160,9 @@ module.exports = [
         name: 'pm2restart',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_🔄 Redémarrage du processus courant via PM2..._`);
+            await ctx.reply(`_🔄 Rechargement forcé de l'ensemble de la grappe PM2..._`);
             exec('pm2 restart all', (err) => {
-                if (err) ctx.reply(`_❌ Échec de pm2 restart_`);
+                if (err) ctx.reply(`_❌ Échec_`);
             });
         }
     },
@@ -137,9 +170,9 @@ module.exports = [
         name: 'pm2logs',
         masterOnly: true,
         execute: async (ctx) => {
-            exec('pm2 logs --lines 15 --nostream', (err, stdout) => {
+            exec('pm2 logs --lines 20 --nostream', (err, stdout) => {
                 if (err) return ctx.reply(`_❌ Échec de la lecture des logs PM2._`);
-                ctx.reply(`📄 *LOGS PM2 (15 dernières lignes)*\n\`\`\`\n${stdout.trim()}\n\`\`\``);
+                ctx.reply(`📄 *CENTRE DE LOGS PM2*\n\`\`\`\n${stdout.trim()}\n\`\`\``);
             });
         }
     },
@@ -148,26 +181,28 @@ module.exports = [
         masterOnly: true,
         execute: async (ctx) => {
             const nets = os.networkInterfaces();
-            let res = `🌐 *INTERFACES RÉSEAU*\n\n`;
+            let res = `🌐 *INTERFACES RÉSEAU PHYSIQUES*\n\n`;
             for (const name of Object.keys(nets)) {
-                res += `*${name}*\n`;
+                res += `📡 *${name}*\n`;
                 for (const net of nets[name]) {
                     if (net.family === 'IPv4' && !net.internal) {
-                        res += ` ├ IPv4 : ${net.address}\n`;
+                        res += `   > IPv4 : \`${net.address}\`\n`;
+                        res += `   > MAC  : \`${net.mac}\`\n`;
                     }
                 }
+                res += '\n';
             }
-            await ctx.reply(res);
+            await ctx.reply(res.trim());
         }
     },
     {
         name: 'speedtest',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_🚀 Lancement du speedtest sur le VPS... Patientez (~30s)._`);
-            exec('npx fast-cli -u', (err, stdout) => {
-                if (err) return ctx.reply(`_❌ Erreur du speedtest._`);
-                ctx.reply(`🚀 *RÉSULTATS SPEEDTEST*\n\`\`\`\n${stdout.trim()}\n\`\`\``);
+            const startMsg = await ctx.reply(`_🚀 Ignition des serveurs de test de bande passante... Cela peut prendre jusqu'à 30 secondes._`);
+            exec('npx fast-cli -u', async (err, stdout) => {
+                if (err) return await ctx.editMsg(startMsg, `_❌ Surcharge réseau : test impossible._`);
+                await ctx.editMsg(startMsg, `🌩️ *PERFORMANCES RÉSEAU BRUTES*\n\n\`\`\`\n${stdout.trim()}\n\`\`\`\n\n_Le VPS crache le feu !_`);
             });
         }
     },
@@ -175,16 +210,16 @@ module.exports = [
         name: 'update',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_⏳ Vérification des mises à jour sur GitHub..._`);
+            await ctx.reply(`_⏳ Vérification des dépôts GitHub de dernière génération..._`);
             exec('git pull origin main', async (error, stdout, stderr) => {
                 const output = stdout.trim() || stderr.trim();
                 if (error && !output.includes('Already up to date')) {
-                    return await ctx.reply(`_❌ Échec de la mise à jour._\n\n\`\`\`${output}\`\`\``);
+                    return await ctx.reply(`*❌ COLLISION LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
                 }
                 if (output.includes('Already up to date')) {
-                    return await ctx.reply(`_✅ Le bot est déjà sur la version la plus récente._`);
+                    return await ctx.reply(`*✅ MATRICE À JOUR*\n_Le code source est déjà dans sa forme finale._`);
                 }
-                await ctx.reply(`_🚀 Mise à jour téléchargée avec succès._\n\n\`\`\`${output}\`\`\`\n\n_Redémarrage en cours (Patientez 5 secondes)..._`);
+                await ctx.reply(`*🚀 TÉLÉCHARGEMENT D'UNE NOUVELLE MATRICE !*\n\n\`\`\`${output}\`\`\`\n\n*⚡ Extinction planifiée pour injection (5s)...*`);
                 await db.setVar('UPDATE_PENDING', ctx.from);
                 setTimeout(() => process.exit(0), 1000);
             });
@@ -196,45 +231,47 @@ module.exports = [
         execute: async (ctx) => {
             const target = ctx.q.toLowerCase().trim();
             if (target) {
-                return await ctx.reply(`_Aide individuelle non détaillée ici. Consulte le menu global._`);
+                return await ctx.reply(`_Pas d'aide détaillée : Tu es l'élite, tu devines. (Ou tape sans argument)_`);
             }
 
-            let menuText = `┌─── 「  *𝐒𝐏𝐈𝐑𝐈𝐓-𝐌𝐃*  」 ───\n`;
-            menuText += `│ 👤 *Propriétaire:* Ouédraogo Fabrice\n`;
-            menuText += `│ ⚙️ *Mode:* ${ctx.currentMode}\n`;
-            menuText += `└─────────────────────\n\n`;
+            let menuText = `╔══════════════════════════╗\n`;
+            menuText += `║      💫 *𝐒𝐏𝐈𝐑𝐈𝐓-𝐌𝐃* 💫      ║\n`;
+            menuText += `╚══════════════════════════╝\n\n`;
+            menuText += `👑 *Maître Suprême:* Ouédraogo Fabrice\n`;
+            menuText += `⚙️ *Statut Global:* ${ctx.currentMode.toUpperCase()}\n\n`;
 
-            menuText += `✦ 𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗜𝗢𝗡\n`;
-            menuText += `  .kick • .warn • .warnings • .resetwarn\n`;
-            menuText += `  .promote • .demote • .group\n\n`;
-
-            menuText += `✦ 𝗖𝗢𝗡𝗙𝗜𝗚 A𝗗𝗠𝗜𝗡\n`;
+            menuText += `🔥 *𝗣𝗔𝗡𝗡𝗘𝗔𝗨 𝗗𝗘 𝗖𝗢𝗡𝗧𝗥𝗢𝗟𝗘*\n`;
             menuText += `  .mode • .antilink • .blacklist\n`;
-            menuText += `  .antidelete • .antiedit\n\n`;
+            menuText += `  .antidelete • .antiedit\n`;
+            menuText += `  .config • .eval • .setname\n\n`;
 
-            menuText += `✦ 𝗠𝗘𝗗𝗜𝗔𝗦\n`;
-            menuText += `  .sticker • .play • .tts • .vv\n\n`;
+            menuText += `🛡️ *𝗠𝗢𝗗𝗘𝗥𝗔𝗧𝗜𝗢𝗡 𝗔𝗕𝗦𝗢𝗟𝗨𝗘*\n`;
+            menuText += `  .kick • .warn • .warnings • .resetwarn\n`;
+            menuText += `  .promote • .demote • .group • .hidetag\n\n`;
 
-            menuText += `✦ 𝗨𝗧𝗜𝗟𝗦\n`;
+            menuText += `🎬 *𝗠𝗘𝗗𝗜𝗔 𝗨𝗡𝗜𝗩𝗘𝗥𝗦𝗘𝗟*\n`;
+            menuText += `  .video (mp4/tiktok/ig) • .play (mp3)\n`;
+            menuText += `  .sticker • .crop • .tts • .vv\n\n`;
+
+            menuText += `🛠️ *𝗨𝗧𝗜𝗟𝗜𝗧𝗔𝗜𝗥𝗘𝗦*\n`;
             menuText += `  .wiki • .weather • .calc • .translate\n`;
-            menuText += `  .remind • .jid • .hidetag\n\n`;
+            menuText += `  .remind • .jid • .qr • .short • .github\n\n`;
 
-            menuText += `✦ 𝗙𝗨𝗡 & 𝗣𝗨𝗕𝗟𝗜𝗖\n`;
-            menuText += `  .joke • .dice • .love • .quote\n`;
-            menuText += `  .8ball • .cat • .dog • .fact\n`;
+            menuText += `🎉 *𝗟𝗢𝗜𝗦𝗜𝗥𝗦 𝗘𝗧 𝗝𝗘𝗨𝗫*\n`;
+            menuText += `  .8ball • .cat • .dog • .fact • .meme\n`;
             menuText += `  .truth • .dare • .flipcoin • .rps\n`;
-            menuText += `  .anime • .movie • .crypto • .meme\n`;
-            menuText += `  .riddle • .compliment • .insult • .math\n\n`;
+            menuText += `  .anime • .crypto • .riddle • .math\n`;
+            menuText += `  .compliment • .insult • .motivation\n\n`;
 
             if (ctx.isMasterAdmin) {
-                menuText += `✦ 𝗦𝗨𝗣𝗘𝗥𝗔𝗗𝗠𝗜𝗡 𝗦𝗔𝗔𝗦 & 𝗩𝗣𝗦\n`;
+                menuText += `💎 *𝗠𝗔𝗦𝗧𝗘𝗥 𝗦𝗔𝗔𝗦 & 𝗩𝗣𝗦 𝗛𝗢𝗦𝗧*\n`;
                 menuText += `  .session • .listbots • .delbot • .restartbot\n`;
-                menuText += `  .system • .exec • .rebootvps\n`;
-                menuText += `  .clearcache • .disk • .pm2list\n`;
-                menuText += `  .pm2restart • .pm2logs • .network • .speedtest\n\n`;
+                menuText += `  .broadcast • .system • .exec • .rebootvps\n`;
+                menuText += `  .clearcache • .disk • .network • .pm2list\n`;
+                menuText += `  .pm2logs • .speedtest • .update\n\n`;
             }
 
-            menuText += `_💡 Plus d'infos : tapez directement la commande !_`;
+            menuText += `_> Tapez le nom de la commande directement._`;
 
             await ctx.reply(menuText);
         }

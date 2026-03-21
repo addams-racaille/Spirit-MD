@@ -10,20 +10,106 @@ module.exports = [
             const antiDeleteMode = await db.getVar('ANTI_DELETE', 'chat');
             const antiEditMode = await db.getVar('ANTI_EDIT', 'chat');
             const autoStatusMode = await db.getVar('AUTO_STATUS', 'like');
+            const antilink = await db.getVar('ANTI_LINK', 'off');
             const exceptionsList = await db.getExceptions();
+            const blacklisted = await db.getBlacklistWords();
 
-            let configText = `⚙️ *CONFIGURATION DU BOT*\n\n`;
-            configText += `*Mode Global :* ${currentMode.toUpperCase()}\n`;
-            configText += `*Auto-Status :* ${autoStatusMode.toUpperCase()}\n`;
-            configText += `*Anti-Delete :* ${antiDeleteMode.toUpperCase()}\n`;
-            configText += `*Anti-Edit   :* ${antiEditMode.toUpperCase()}\n\n`;
-            configText += `*Exceptions (${exceptionsList.length}) :*\n`;
+            let txt = `╔════════════════════════╗\n`;
+            txt += `║ ⚙️ *PANNEAU DE CONFIGURATION* ⚙️ ║\n`;
+            txt += `╚════════════════════════╝\n\n`;
+            
+            txt += `🟢 *MODE GLOBAL* : \`${currentMode.toUpperCase()}\`\n`;
+            txt += `🛡️ *ANTI-LINK* : \`${antilink.toUpperCase()}\`\n`;
+            txt += `👁️ *AUTO-STATUS* : \`${autoStatusMode.toUpperCase()}\`\n`;
+            txt += `🗑️ *ANTI-DELETE* : \`${antiDeleteMode.toUpperCase()}\`\n`;
+            txt += `✏️ *ANTI-EDIT*   : \`${antiEditMode.toUpperCase()}\`\n\n`;
+            
+            txt += `📝 *MOTS BLACKLISTÉS (${blacklisted.length})* :\n`;
+            txt += ` > \`${blacklisted.join(', ') || 'Aucun'}\`\n\n`;
+
+            txt += `🛡️ *EXCEPTIONS ANTI-LINK/DELETE (${exceptionsList.length})* :\n`;
             if (exceptionsList.length > 0) {
-                exceptionsList.forEach(e => configText += `- ${e}\n`);
+                exceptionsList.forEach(e => txt += ` -> \`${e}\`\n`);
             } else {
-                configText += `_Aucune exception_`;
+                txt += ` > \`Aucun favori immunisé.\`\n`;
             }
-            return await reply(configText);
+
+            txt += `\n_Modifiez ces valeurs via les commandes individuelles._`;
+
+            return await reply(txt);
+        }
+    },
+    {
+        name: 'eval',
+        aliases: ['>'],
+        masterOnly: true,
+        execute: async (ctx) => {
+            const { q, reply, sock, msg } = ctx;
+            if (!q) return await reply(`_⚠️ Fournis du code JS à évaluer._`);
+            try {
+                // Créer un environnement riche pour l'évaluation
+                const evalCmd = `(async () => { ${q.includes('await') ? q : `return ${q}`} })()`;
+                const result = await eval(evalCmd);
+                const output = require('util').inspect(result, { depth: 2 });
+                await reply(`*✅ EVALUATION RÉUSSIE*\n\`\`\`javascript\n${output}\n\`\`\``);
+            } catch (e) {
+                await reply(`*❌ EVALUATION ÉCHOUÉE*\n\`\`\`javascript\n${e.stack}\n\`\`\``);
+            }
+        }
+    },
+    {
+        name: 'setname',
+        masterOnly: true,
+        execute: async (ctx) => {
+            const { q, sock, reply } = ctx;
+            if (!q) return await reply(`_Texte manquant._`);
+            try {
+                await sock.updateProfileName(q);
+                await reply(`_✅ Le nom exclusif du bot a été changé en : *${q}*_`);
+            } catch (e) {
+                await reply(`_❌ Erreur : ${e.message}_`);
+            }
+        }
+    },
+    {
+        name: 'setbio',
+        aliases: ['setstatus'],
+        masterOnly: true,
+        execute: async (ctx) => {
+            const { q, sock, reply } = ctx;
+            if (!q) return await reply(`_Texte manquant._`);
+            try {
+                await sock.updateProfileStatus(q);
+                await reply(`_✅ L'actu/bio a bien été modifiée en : *${q}*_`);
+            } catch (e) {
+                await reply(`_❌ Erreur : ${e.message}_`);
+            }
+        }
+    },
+    {
+        name: 'setpp',
+        masterOnly: true,
+        execute: async (ctx) => {
+            const { sock, msg, reply, commandName } = ctx;
+            const context = msg.message?.extendedTextMessage?.contextInfo;
+            const quotedMsg = context?.quotedMessage;
+            let mediaMessage = quotedMsg?.imageMessage || msg.message?.imageMessage;
+
+            if (!mediaMessage) {
+                return await reply(`_⚠️ Réponds à ton image préférée avec la commande \`.${commandName}\` pour en faire ma photo de profil !_`);
+            }
+
+            try {
+                const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+                const stream = await downloadContentFromMessage(mediaMessage, 'image');
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+                
+                await sock.updateProfilePicture(sock.user.id, buffer);
+                await reply(`_✅ Magnifique ! Ma nouvelle photo de profil est en place._`);
+            } catch (e) {
+                await reply(`_❌ Erreur : L'image est peut-être trop lourde. (${e.message})_`);
+            }
         }
     },
     {
@@ -51,9 +137,9 @@ module.exports = [
             if (action === 'list') {
                 const exceptionsList = await db.getExceptions();
                 if (exceptionsList.length === 0) return await reply(`_Aucune exception configurée._`);
-                let msg = `*Liste des Exceptions :*\n\n`;
-                exceptionsList.forEach(e => msg += `- ${e}\n`);
-                return await reply(msg);
+                let msgText = `*Liste des Exceptions :*\n\n`;
+                exceptionsList.forEach(e => msgText += `- ${e}\n`);
+                return await reply(msgText);
             }
 
             if (!target.includes('@')) {
@@ -207,11 +293,11 @@ module.exports = [
             const target = q.toLowerCase().trim();
             if (!target) {
                 const current = await db.getVar('ANTI_LINK', 'off');
-                return await reply(`_*Anti-Link*_\n_Supprime automatiquement les liens dans les groupes_\n\n_Statut actuel : ${current}_\n\n\`.antilink on\` — activer\n\`.antilink off\` — désactiver`);
+                return await reply(`_*Anti-Link*_\n_Supprime automatiquement ABSOLUMENT tous les liens dans les groupes (tolérance zéro)_\n\n_Statut actuel : ${current}_\n\n\`.antilink on\` — activer\n\`.antilink off\` — désactiver`);
             }
             if (target === 'on' || target === 'off') {
                 await db.setVar('ANTI_LINK', target);
-                return await reply(`_Anti-link ${target === 'on' ? 'activé ✅' : 'désactivé ❌'}_`);
+                return await reply(`_Anti-link ${target === 'on' ? 'activé (Tolérance zéro) ✅' : 'désactivé ❌'}_`);
             }
             return await reply(`_Option invalide : \`on\` ou \`off\`_`);
         }
