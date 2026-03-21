@@ -51,9 +51,9 @@ module.exports = [
                 const evalCmd = `(async () => { ${q.includes('await') ? q : `return ${q}`} })()`;
                 const result = await eval(evalCmd);
                 const output = require('util').inspect(result, { depth: 2 });
-                await reply(`*✅ EVALUATION RÉUSSIE*\n\`\`\`javascript\n${output}\n\`\`\``);
+                await reply(`*✅ Évaluation Réussie*\n\`\`\`javascript\n${output}\n\`\`\``);
             } catch (e) {
-                await reply(`*❌ EVALUATION ÉCHOUÉE*\n\`\`\`javascript\n${e.stack}\n\`\`\``);
+                await reply(`*❌ Échec de l'évaluation*\n\`\`\`javascript\n${e.stack}\n\`\`\``);
             }
         }
     },
