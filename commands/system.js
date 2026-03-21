@@ -210,16 +210,13 @@ module.exports = [
         name: 'update',
         masterOnly: true,
         execute: async (ctx) => {
-            await ctx.reply(`_⏳ Vérification des dépôts GitHub de dernière génération..._`);
-            exec('git pull origin main', async (error, stdout, stderr) => {
+            await ctx.reply(`_⏳ Synchronisation forcée avec le dépôt GitHub..._`);
+            exec('git fetch origin main && git reset --hard origin/main', async (error, stdout, stderr) => {
                 const output = stdout.trim() || stderr.trim();
-                if (error && !output.includes('Already up to date')) {
-                    return await ctx.reply(`*❌ COLLISION LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
+                if (error) {
+                    return await ctx.reply(`*❌ ERREUR LORS DE LA SYNCHRONISATION*\n\n\`\`\`${output}\`\`\``);
                 }
-                if (output.includes('Already up to date')) {
-                    return await ctx.reply(`*✅ MATRICE À JOUR*\n_Le code source est déjà dans sa forme finale._`);
-                }
-                await ctx.reply(`*🚀 TÉLÉCHARGEMENT D'UNE NOUVELLE MATRICE !*\n\n\`\`\`${output}\`\`\`\n\n*⚡ Extinction planifiée pour injection (5s)...*`);
+                await ctx.reply(`*🚀 LA MATRICE A ÉTÉ SYNCHRONISÉE !*\n\n\`\`\`${output}\`\`\`\n\n*⚡ Redémarrage en cours (5 secondes)...*`);
                 await db.setVar('UPDATE_PENDING', ctx.from);
                 setTimeout(() => process.exit(0), 1000);
             });
