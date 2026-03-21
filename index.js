@@ -138,7 +138,8 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
 }
 
 // ─── Lancement au démarrage ──────────────────────────────────────────────────
-(async () => {
+if (require.main === module) {
+    (async () => {
     await db.initDB();
     global.dbReady = true;
 
@@ -171,7 +172,8 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
             await new Promise(r => setTimeout(r, 2000)); // Anti-spam boot
         }
     }
-})();
+    })();
+}
 
 module.exports = { startBot };
 

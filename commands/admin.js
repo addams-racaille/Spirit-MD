@@ -5,7 +5,7 @@ module.exports = [
         name: 'config',
         desc: 'Affiche le panneau de contrôle global et les statistiques de configuration du bot.',
         usage: '.config',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { reply } = ctx;
             const currentMode = await ctx.getVar('MODE', 'public');
@@ -130,7 +130,7 @@ module.exports = [
         name: 'except',
         desc: 'Gère la liste VIP des numéros immunisés et insensibles à la modération automatique.',
         usage: '.except add/remove/list <jid>',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const args = q.trim().split(/ +/);
@@ -178,7 +178,7 @@ module.exports = [
         name: 'autostatus',
         desc: 'Configure la visualisation (et le like silencieux 💚) automatique des Statuts de vos contacts.',
         usage: '.autostatus like/view/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
@@ -208,7 +208,7 @@ module.exports = [
         name: 'mode',
         desc: 'Vérouille complètement le bot en mode Private (réservé au proprio) ou Public.',
         usage: '.mode public/private',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const newMode = q.toLowerCase().trim();
@@ -226,7 +226,7 @@ module.exports = [
         name: 'antidelete',
         desc: 'Intercepte et récupère les messages text/media effacés en douce par vos contacts.',
         usage: '.antidelete chat/sudo/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
@@ -272,7 +272,7 @@ module.exports = [
         name: 'antiedit',
         desc: 'Fouille la mémoire pour exposer l\'ancienne version d\'un message modifié en traitre.',
         usage: '.antiedit chat/sudo/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             let target = q.toLowerCase().trim();
@@ -318,7 +318,7 @@ module.exports = [
         name: 'antilink',
         desc: 'Bouclier paranoïaque : censure instantanément TOUS les liens suspects ou normaux.',
         usage: '.antilink on/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();
@@ -338,7 +338,7 @@ module.exports = [
         name: 'blacklist',
         desc: 'Censure impitoyablement tout membre prononçant l\'un des mots interdits configurés.',
         usage: '.blacklist add/remove/list <mot>',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const args = q.trim().split(' ');
@@ -365,7 +365,7 @@ module.exports = [
         name: 'setprefix',
         desc: 'Change le préfixe de déclenchement des commandes du bot (ex: . / ! / #). Effet immédiat, sans redémarrage.',
         usage: '.setprefix <nouveauPréfixe>',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply, sessionId, currentPrefix } = ctx;
             const newPrefix = q.trim();
@@ -390,7 +390,7 @@ module.exports = [
         name: 'autoread',
         desc: 'Simule votre présence humaine en envoyant systématiquement des coches bleues (lu).',
         usage: '.autoread on/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();
@@ -407,7 +407,7 @@ module.exports = [
         name: 'antivv',
         desc: 'Arme de destruction de la vie privée: enregistre clandestinement toutes les "Vues Uniques".',
         usage: '.antivv sudo/chat/off',
-        adminOnly: true,
+        ownerOnly: true,
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const target = q.toLowerCase().trim();

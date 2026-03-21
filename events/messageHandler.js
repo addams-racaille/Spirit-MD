@@ -118,10 +118,23 @@ module.exports = async (sock, msg, messageCache) => {
                 const isOwner = isFromMe || senderJid === `${ownerNumberStr}@s.whatsapp.net`;
                 const isMasterAdmin = isOwner && sock.isMaster;
 
+                let isSenderAdmin = false;
+                if (from.endsWith('@g.us')) {
+                    try {
+                        const groupMeta = await sock.groupMetadata(from);
+                        isSenderAdmin = !!groupMeta.participants.find(p => p.id === senderJid)?.admin;
+                    } catch (e) {}
+                }
+
                 if (currentMode === 'private' && !isOwner) { return; }
 
-                if (cmd.adminOnly && !isOwner) {
+                if (cmd.ownerOnly && !isOwner) {
                     await sock.sendMessage(from, { text: `_❌ Seul le propriétaire du bot peut utiliser cette commande._` }, { quoted: msg });
+                    return;
+                }
+
+                if (cmd.adminOnly && !isOwner && !isSenderAdmin) {
+                    await sock.sendMessage(from, { text: `_❌ Cette commande nécessite d'être administrateur du groupe ou propriétaire du bot._` }, { quoted: msg });
                     return;
                 }
 

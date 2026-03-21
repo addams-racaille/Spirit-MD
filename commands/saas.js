@@ -4,13 +4,27 @@ const path = require('path');
 module.exports = [
     {
         name: 'session',
-        desc: 'Crée instantanément une session autonome connectée à ce numéro de compte.',
-        usage: '.session',
+        desc: 'Crée instantanément une session autonome connectée à un numéro WhatsApp spécifié.',
+        usage: '.session <numero_telephone>',
         // Commande ouverte à tous pour créer son propre bot !
         execute: async (ctx) => {
-            const { reply, sock, msg, from } = ctx;
-            const senderJid = msg.key.participant || from;
-            const subNum = senderJid.split('@')[0];
+            const { reply, sock, msg, from, q, currentPrefix } = ctx;
+            const p = currentPrefix || '.';
+
+            if (!q) {
+                return await reply(`_*Création de Sous-Bot (SaaS)*_\n\n` + 
+                `_Cette commande génère un code pour connecter un nouveau numéro et lui donner son propre bot autonome._\n\n` +
+                `*Utilisation correcte :*\n` +
+                `\`${p}session <numero_telephone>\`\n\n` +
+                `*Exemple :*\n` +
+                `\`${p}session 33612345678\` (Indicatif pays inclus, sans +, sans espaces)\n\n` +
+                `_Ensuite, allez sur le compte WhatsApp cible > Appareils liés > Lier avec numéro de téléphone, et entrez le code fourni._`);
+            }
+
+            const subNum = q.trim().replace(/[^0-9]/g, '');
+            if (subNum.length < 8 || subNum.length > 15) {
+                return await reply(`_❌ Numéro invalide. Ex: \`${p}session 33612345678\`_`);
+            }
             
             const startMsg = await reply(`⏳ *Création de votre instance Bot...*\nNuméro ciblé : \`${subNum}\`\nVeuillez patienter quelques instants...`);
             
