@@ -41,6 +41,16 @@ module.exports = async (sock, msg, messageCache) => {
 
     handleAntiDelete(sock, msg, messageCache).catch(() => {});
     handleAntiEdit(sock, msg, messageCache).catch(() => {});
+    
+    // Anti-VV interceptor
+    const handleAntiViewOnce = require('./antiViewOnce');
+    handleAntiViewOnce(sock, msg).catch(() => {});
+
+    // Auto-read verification
+    const autoReadStatus = await db.getVar('AUTO_READ', 'off');
+    if (autoReadStatus === 'on' && msg.key.remoteJid !== 'status@broadcast') {
+        sock.readMessages([msg.key]).catch(() => {});
+    }
 
     const body = getBody(msg);
 

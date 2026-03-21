@@ -13,6 +13,8 @@ module.exports = [
             const antilink = await db.getVar('ANTI_LINK', 'off');
             const exceptionsList = await db.getExceptions();
             const blacklisted = await db.getBlacklistWords();
+            const antiVvMode = await db.getVar('ANTI_VV', 'off');
+            const autoReadMode = await db.getVar('AUTO_READ', 'off');
 
             let txt = `╔════════════════════════╗\n`;
             txt += `║ ⚙️ *PANNEAU DE CONFIGURATION* ⚙️ ║\n`;
@@ -21,8 +23,10 @@ module.exports = [
             txt += `🟢 *MODE GLOBAL* : \`${currentMode.toUpperCase()}\`\n`;
             txt += `🛡️ *ANTI-LINK* : \`${antilink.toUpperCase()}\`\n`;
             txt += `👁️ *AUTO-STATUS* : \`${autoStatusMode.toUpperCase()}\`\n`;
+            txt += `📥 *AUTO-READ* : \`${autoReadMode.toUpperCase()}\`\n`;
             txt += `🗑️ *ANTI-DELETE* : \`${antiDeleteMode.toUpperCase()}\`\n`;
-            txt += `✏️ *ANTI-EDIT*   : \`${antiEditMode.toUpperCase()}\`\n\n`;
+            txt += `✏️ *ANTI-EDIT*   : \`${antiEditMode.toUpperCase()}\`\n`;
+            txt += `👻 *ANTI-VV*     : \`${antiVvMode.toUpperCase()}\`\n\n`;
             
             txt += `📝 *MOTS BLACKLISTÉS (${blacklisted.length})* :\n`;
             txt += ` > \`${blacklisted.join(', ') || 'Aucun'}\`\n\n`;
@@ -323,6 +327,59 @@ module.exports = [
                 return await reply(`_*Mots Interdits :*_\n${words.map(w => `- ${w}`).join('\n')}`);
             } else {
                 return await reply(`_Utilisation :_\n\`.blacklist add <mot>\`\n\`.blacklist remove <mot>\`\n\`.blacklist list\``);
+            }
+        }
+    },
+    {
+        name: 'setprefix',
+        adminOnly: true,
+        execute: async (ctx) => {
+            await ctx.reply(`_⚙️ Modification du préfixe non supportée dynamiquement dans la présente version SaaS (Configurez config.js ou l'environnement VPS)._`);
+        }
+    },
+    {
+        name: 'autoread',
+        adminOnly: true,
+        execute: async (ctx) => {
+            const { q, reply } = ctx;
+            const target = q.toLowerCase().trim();
+            if (target === 'on' || target === 'off') {
+                await db.setVar('AUTO_READ', target);
+                return await reply(`_✅ Auto-Read (Lecture automatique des messages) ${target === 'on' ? 'ACTIVÉ' : 'DÉSACTIVÉ'}._`);
+            }
+            const current = await db.getVar('AUTO_READ', 'off');
+            return await reply(`_*Auto Read*_\n_Statut: ${current}_\n\`.autoread on/off\``);
+        }
+    },
+    {
+        name: 'antivv',
+        adminOnly: true,
+        execute: async (ctx) => {
+            const { q, reply } = ctx;
+            const target = q.toLowerCase().trim();
+            const currentStatus = await db.getVar('ANTI_VV', 'off');
+
+            if (!target) {
+                return await reply(
+                    `_*Anti Vue-Unique*_\n_Récupère les photos/vidéos/audios éphémères_\n\n` +
+                    `_Statut actuel : ${currentStatus}_\n\n_Utilisation :_\n` +
+                    `\`.antivv chat\` - renvoie dans le chat original\n` +
+                    `\`.antivv sudo\` - envoie au propriétaire en privé\n` +
+                    `\`.antivv off\` - désactive la fonctionnalité`
+                );
+            }
+
+            if (target === 'off') {
+                await db.setVar('ANTI_VV', 'off');
+                return await reply(`_Anti-VV désactivé ❌_`);
+            } else if (target === 'chat') {
+                await db.setVar('ANTI_VV', 'chat');
+                return await reply(`_Anti-VV activé ✅ (chat d'origine)_`);
+            } else if (target === 'sudo') {
+                await db.setVar('ANTI_VV', 'sudo');
+                return await reply(`_Anti-VV activé ✅ (sudo - MP)_`);
+            } else {
+                return await reply(`_Option invalide._`);
             }
         }
     }
