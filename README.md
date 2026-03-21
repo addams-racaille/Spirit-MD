@@ -1,7 +1,7 @@
 # 🌌 Spirit MD — Bot WhatsApp Multi-Fonctions
 
 <div align="center">
-  <img src="https://telegra.ph/file/ed21a0a5628cb39180b7e.jpg" alt="Spirit MD Logo" width="200" style="border-radius: 50%;">
+  <img src="https://www.pinterest.com/pin/ghosty--101401429104738916/" alt="Spirit MD Logo" width="200" style="border-radius: 50%;">
   <p align="center">
     <a href="https://github.com/addams-racaille/Spirit-MD">
       <img src="https://img.shields.io/github/stars/addams-racaille/Spirit-MD?style=for-the-badge&color=blue&logo=github" alt="Stars">
