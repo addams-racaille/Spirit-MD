@@ -8,31 +8,23 @@ const {
 const pino = require('pino');
 const chalk = require('chalk');
 const figlet = require('figlet');
-const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const config = require('./config');
 
-// Chargeurs des event handlers
 const handleStatus = require('./events/statusReader');
 const handleAntiDelete = require('./events/antiDelete');
 const handleAntiEdit = require('./events/antiEdit');
 
-// Filtrer les logs internes de Baileys qui polluent le terminal
-// On utilise pino en mode 'silent' pour ne jamais voir les logs internes de Baileys
 const baileysLogger = pino({ level: 'silent' });
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const question = (text) => new Promise((resolve) => rl.question(text, resolve));
-
 const NodeCache = require('node-cache');
-
-// Cache optimisé pour Anti-Delete et Anti-Edit (expire automatiquement après 24h sans bloquer l'Event Loop)
 const messageCache = new NodeCache({ stdTTL: 86400, checkperiod: 3600, useClones: false });
-let isReconnecting = false;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── VARIABLES GLOBALES ────────────────────────────────────────────────────────
+global.activeSessions = new Map(); // Garde en mémoire les instances allumées
+global.dbReady = false;
+
 function getBody(msg) {
     const m = msg.message;
     if (!m) return '';
@@ -47,18 +39,19 @@ function getBody(msg) {
     );
 }
 
-// ─── Bot principal ─────────────────────────────────────────────────────────────
-async function startBot(isRetry = false) {
-    if (!isRetry) {
-        console.clear();
-        console.log(chalk.cyan(figlet.textSync('Mon Bot', { horizontalLayout: 'full' })));
-        console.log(chalk.green('🚀 Initialisation du bot...\n'));
-        
-        // Initialiser la base de données au démarrage
-        await db.initDB();
+// ─── BOT SaaS ──────────────────────────────────────────────────────────────────
+async function startBot(sessionId = 'master', isMaster = false, requestNumber = null) {
+    const sessionFolder = path.join(__dirname, 'sessions', sessionId);
+    
+    if (!fs.existsSync(path.join(__dirname, 'sessions'))) {
+        fs.mkdirSync(path.join(__dirname, 'sessions'));
     }
 
-    const { state, saveCreds } = await useMultiFileAuthState('session');
+    if (!fs.existsSync(sessionFolder)) {
+        fs.mkdirSync(sessionFolder, { recursive: true });
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -69,31 +62,39 @@ async function startBot(isRetry = false) {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
         },
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        browser: ['Mac OS', 'Safari', '10.15.7'], // Furtivité Anti-Ban
         generateHighQualityLinkPreview: true,
-        markOnlineOnConnect: true,
+        markOnlineOnConnect: false, // Furtivité
         shouldSyncHistoryMessage: () => false,
     });
 
+    sock.customSessionId = sessionId;
+    sock.isMaster = isMaster;
+    sock.customOwner = requestNumber || config.OWNER_NUMBER; // Pour les sub-bots
+    sock.isReconnecting = false;
+    
+    global.activeSessions.set(sessionId, sock);
+
     // ── Pairing Code ──────────────────────────────────────────────────────────
     if (!sock.authState.creds.registered) {
-        console.log(chalk.yellow('⚠️ Aucune session trouvée.'));
-        const phoneNumber = await question(chalk.green("Entrez votre numéro WhatsApp (ex: 33612345678) : "));
-        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(cleanNumber);
-                const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
-                console.log(chalk.cyan('\n============================================='));
-                console.log(chalk.white(' 🔗 VOTRE CODE : '), chalk.yellow.bold(formatted));
-                console.log(chalk.cyan('=============================================\n'));
-                console.log(chalk.white('Entrez ce code dans WhatsApp → Appareils liés → Lier avec numéro.\n'));
-            } catch (err) {
-                console.log(chalk.red('Erreur Pairing Code :'), err.message);
-            }
-        }, 3000);
+        if (isMaster) {
+            console.log(chalk.yellow(`⚠️ Aucune session MASTER trouvée.`));
+            const targetNumber = config.OWNER_NUMBER || '22658606907';
+            console.log(chalk.yellow(`Génération du code Maître pour ${targetNumber}...`));
+            setTimeout(async () => {
+                try {
+                    const code = await sock.requestPairingCode(targetNumber);
+                    const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
+                    console.log(chalk.cyan('\n============================================='));
+                    console.log(chalk.white(' 🔗 CODE MASTER : '), chalk.yellow.bold(formatted));
+                    console.log(chalk.cyan('=============================================\n'));
+                } catch (e) {
+                    console.log(chalk.red('Erreur Pairing Code Master:'), e.message);
+                }
+            }, 3000);
+        }
     } else {
-        console.log(chalk.green('✅ Session existante chargée. Connexion en cours...'));
+        console.log(chalk.green(`✅ Session chargée : ${sessionId} ${isMaster ? '(MAÎTRE)' : '(SOUS-BOT)'}`));
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -107,44 +108,39 @@ async function startBot(isRetry = false) {
             const isConflict = reason.toLowerCase().includes('conflict') || statusCode === 440;
             const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-            console.log(chalk.red('❌ Connexion fermée. Raison :'), reason || statusCode);
+            console.log(chalk.red(`❌ Connexion fermée [${sessionId}]. Raison :`), reason || statusCode);
 
             if (isLoggedOut) {
-                console.log(chalk.red('⚠️ Déconnecté (Logged Out). Supprimez le dossier "session" et relancez.'));
-                process.exit(1);
-            } else if (!isReconnecting) {
-                isReconnecting = true;
+                console.log(chalk.red(`⚠️ Déconnecté (Logged Out) [${sessionId}]. On supprime sa session.`));
+                if (fs.existsSync(sessionFolder)) fs.rmSync(sessionFolder, { recursive: true, force: true });
+                global.activeSessions.delete(sessionId);
+            } else if (!sock.isReconnecting) {
+                sock.isReconnecting = true;
                 const delay = isConflict ? 15000 : 5000;
-                const msg = isConflict
-                    ? '⚠️ Conflit : une autre instance est active. Attente 15s...'
-                    : '🔄 Reconnexion dans 5 secondes...';
-                console.log(chalk.yellow(msg));
-                setTimeout(() => { isReconnecting = false; startBot(true); }, delay);
+                setTimeout(() => { 
+                    startBot(sessionId, isMaster, sock.customOwner); 
+                }, delay);
             }
         } else if (connection === 'open') {
-            isReconnecting = false;
-            console.log(chalk.cyan(figlet.textSync('Connecte !', { horizontalLayout: 'full' })));
-            console.log(chalk.green('✅ Bot connecté et prêt !'));
-
-            // Envoyer un message si le bot vient de se redémarrer suite à une mise à jour
-            const pendingUpdateJid = await db.getVar('UPDATE_PENDING', '');
-            if (pendingUpdateJid) {
-                try {
-                    await sock.sendMessage(pendingUpdateJid, { text: `_✅ Redémarrage réussi ! Le bot est à jour et opérationnel._` });
-                    await db.setVar('UPDATE_PENDING', ''); // Nettoyer le marqueur
-                } catch(e) {}
+            sock.isReconnecting = false;
+            if (isMaster) {
+                console.log(chalk.cyan(figlet.textSync('MASTER !', { horizontalLayout: 'full' })));
             }
-
-            console.log(chalk.white(' - Always Online     : ✅'));
-            console.log(chalk.white(' - Status Autoliker  : ✅'));
-            console.log(chalk.white(' - Anti-Delete/Edit  : ✅'));
-            console.log(chalk.white(' - Base de données   : ✅\n'));
+            console.log(chalk.green(`✅ Bot connecté et prêt : [${sessionId}]`));
+            
+            if (isMaster) {
+                const pendingUpdateJid = await db.getVar('UPDATE_PENDING', '');
+                if (pendingUpdateJid) {
+                    try {
+                        await sock.sendMessage(pendingUpdateJid, { text: `_✅ Redémarrage réussi ! Le bot est à jour et opérationnel._` });
+                        await db.setVar('UPDATE_PENDING', ''); 
+                    } catch(e) {}
+                }
+            }
         }
     });
 
-    // ── Messages entrants ─────────────────────────────────────────────────────
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        // Ignorer les notifications silencieuses
         if (type !== 'notify') return;
 
         for (const msg of messages) {
@@ -154,64 +150,50 @@ async function startBot(isRetry = false) {
             const isFromMe = msg.key.fromMe;
             const pushName = msg.pushName || 'Inconnu';
             
-            // Enregistrement dans la DB SQLite (hors statuts) - ASYNCHRONE
             if (from !== 'status@broadcast') {
-                db.logMessage(msg).catch(e => console.log(chalk.red('Err DB log:'), e.message));
-            }
-
-            // ── Événements extérieurs centralisés ──────────────────────────
-            if (from === 'status@broadcast') {
-                handleStatus(sock, msg).catch(e => console.log(chalk.red('Err handleStatus:'), e.message));
+                db.logMessage(msg).catch(() => {});
+            } else {
+                handleStatus(sock, msg).catch(() => {});
                 continue;
             }
 
-            // Gestion de la sauvegarde des messages pour l'Anti-Delete/Edit
             if (msg.key.id) {
                 messageCache.set(msg.key.id, msg);
             }
 
-            // Gestion Anti-Delete - ASYNCHRONE
-            handleAntiDelete(sock, msg, messageCache).catch(e => console.log(chalk.red('Err handleAntiDelete:'), e.message));
-
-            // Gestion Anti-Edit - ASYNCHRONE
-            handleAntiEdit(sock, msg, messageCache).catch(e => console.log(chalk.red('Err handleAntiEdit:'), e.message));
+            handleAntiDelete(sock, msg, messageCache).catch(() => {});
+            handleAntiEdit(sock, msg, messageCache).catch(() => {});
 
             const body = getBody(msg);
 
-            // ── Filtrage Blacklist ───────────────────────────────────────────
+            // Blacklist (Partagé globalement pour tout le serveur)
             if (from.endsWith('@g.us') && body && !isFromMe) {
                 const participant = msg.key.participant || from;
                 const exceptions = await db.getExceptions();
                 
-                // Ne pas filtrer le propriétaire ni les exceptions
-                if (participant !== `${config.OWNER_NUMBER}@s.whatsapp.net` && !exceptions.includes(participant)) {
+                if (participant !== `${sock.customOwner}@s.whatsapp.net` && !exceptions.includes(participant)) {
                     const blacklisted = await db.getBlacklistWords();
                     const bodyLower = body.toLowerCase();
-                    // On vérifie s'il contient un des mots de la blacklist (entouré de limites de mots ou pas selon le besoin, ici on fait simple on check la présence brute)
                     const foundWord = blacklisted.find(w => bodyLower.includes(w));
                     if (foundWord) {
-                        console.log(chalk.red(`[BLACKLIST] Mot interdit détecté ("${foundWord}"), suppression...`));
                         try {
                             await sock.sendMessage(from, { delete: msg.key });
-                            await sock.sendMessage(from, { text: `_⚠️ @${participant.split('@')[0]}, l'utilisation de ce mot est interdite ici._`, mentions: [participant] });
-                            continue; // On bloque la suite du traitement
-                        } catch (e) {
-                            console.log(chalk.red('Err suppression blacklist:'), e.message);
-                        }
+                            await sock.sendMessage(from, { text: `_⚠️ @${participant.split('@')[0]}, interdit._`, mentions: [participant] });
+                            continue;
+                        } catch (e) {}
                     }
                 }
             }
 
-            // ── Commandes (acceptées depuis n'importe qui, y compris fromMe) ─
+            // Commandes
             if (body && body.startsWith(config.PREFIX)) {
-                console.log(chalk.blue(`[CMD${isFromMe ? '/MOI' : ''}] ${pushName}: ${body}`));
+                console.log(chalk.blue(`[CMD][${sessionId}] ${pushName}: ${body}`));
                 const args = body.slice(config.PREFIX.length).trim().split(/ +/);
                 const commandName = args.shift().toLowerCase();
                 const q = args.join(' ');
                 
-                // Exécution de la commande en arrière-plan pour ne pas bloquer les autres
                 try {
-                    require('./commands')(sock, msg, commandName, q, from)
+                    require('./commands')(sock, msg, commandName, q, from, messageCache)
                         .catch(e => console.log(chalk.red('[CMD REJET]'), e.message));
                 } catch (e) {
                     console.log(chalk.red('[CMD ERR]'), e.message);
@@ -219,12 +201,47 @@ async function startBot(isRetry = false) {
             }
         }
     });
+
+    return sock;
 }
 
+// ─── Lancement au démarrage ──────────────────────────────────────────────────
+(async () => {
+    await db.initDB();
+    global.dbReady = true;
 
-startBot();
+    // Migrer l'ancien dossier `session` vers `sessions/master` si besoin
+    if (fs.existsSync(path.join(__dirname, 'session')) && !fs.existsSync(path.join(__dirname, 'sessions', 'master'))) {
+        fs.mkdirSync(path.join(__dirname, 'sessions'), { recursive: true });
+        fs.renameSync(path.join(__dirname, 'session'), path.join(__dirname, 'sessions', 'master'));
+    }
+
+    const sessionsDir = path.join(__dirname, 'sessions');
+    if (!fs.existsSync(sessionsDir)) fs.mkdirSync(sessionsDir);
+    
+    // Lire les dossiers
+    const folders = fs.readdirSync(sessionsDir).filter(f => fs.lstatSync(path.join(sessionsDir, f)).isDirectory());
+    
+    if (folders.length === 0) {
+        // Aucune session, on start le master nativement
+        await startBot('master', true);
+    } else {
+        // Lancer chaque dossier détecté
+        for (const f of folders) {
+            // Le nom d'un sous-bot contient le numéro (ex: user_33612...) on l'extrait si s'en est un
+            const isMaster = (f === 'master');
+            const ownerMatch = f.match(/^user_(\d+)$/);
+            const subOwner = ownerMatch ? ownerMatch[1] : null;
+            
+            await startBot(f, isMaster, subOwner);
+            await new Promise(r => setTimeout(r, 2000)); // Anti-spam boot
+        }
+    }
+})();
+
+module.exports = { startBot };
 
 process.on('SIGINT', () => {
-    console.log(chalk.red('\n🚫 Arrêt du bot.'));
+    console.log(chalk.red('\n🚫 Arrêt des bots.'));
     process.exit(0);
 });

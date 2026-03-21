@@ -46,15 +46,16 @@ function parseDuration(duration) {
 }
 
 
-module.exports = async (sock, msg, commandName, q, from) => {
+module.exports = async (sock, msg, commandName, q, from, messageCache) => {
     try {
         const isFromMe = msg.key.fromMe;
         const currentMode = await db.getVar('MODE', 'public');
         
-        // Détection du propriétaire (Owner)
+        // Détection du propriétaire dynamique (SaaS)
         const senderJid = msg.key.participant || msg.key.remoteJid;
-        const ownerNumberStr = config.OWNER_NUMBER || '';
+        const ownerNumberStr = sock.customOwner || config.OWNER_NUMBER || '';
         const isOwner = isFromMe || senderJid === `${ownerNumberStr}@s.whatsapp.net`;
+        const isMasterAdmin = isOwner && sock.isMaster;
         
         // Si privé, seules les commandes venant du proprio (isOwner) sont acceptées
         if (currentMode === 'private' && !isOwner) {
@@ -1043,6 +1044,72 @@ module.exports = async (sock, msg, commandName, q, from) => {
             });
         }
 
+        // 18. Commandes SaaS (SuperAdmin)
+        if (commandName === 'session') {
+            if (!isMasterAdmin) return await reply(`_❌ Commande strictement réservée au Maître._`);
+            if (!q) return await reply(`_⚠️ Précise un numéro pour générer son espace de sous-bot. Ex: \`.session 33612345678\`_`);
+            const subNum = q.replace(/[^0-9]/g, '');
+            if (subNum.length < 10) return await reply(`_❌ Numéro invalide._`);
+            
+            await reply(`_⏳ Démarrage d'une structure serveur isolée pour le ${subNum}..._\n_Veuillez patienter..._`);
+            
+            try {
+                const { startBot } = require('./index');
+                // On allume le sous-bot temporairement de force
+                const subSock = await startBot('user_' + subNum, false, subNum);
+                
+                setTimeout(async () => {
+                    try {
+                        const code = await subSock.requestPairingCode(subNum);
+                        const formatted = code.match(/.{1,4}/g).join('-');
+                        await reply(`✅ *SOUS-BOT PRÉPARÉ*\n\nVoici le code secret pour que le client connecte ce nouveau bot chez lui :\n\n👉 *${formatted}*\n\n_Le client doit aller sur WhatsApp > Appareils Liés > Lier avec numéro._\n\n_Une fois entré, son bot s'allumera définitivement sans jamais toucher au tiens !_`);
+                    } catch (e) {
+                         await reply(`_❌ Erreur lors de la génération du code : (Il faut parfois réessayer) ${e.message}_`);
+                    }
+                }, 4000);
+            } catch (e) {
+                await reply(`_❌ Erreur lancement instance : ${e.message}_`);
+            }
+        }
+
+        if (commandName === 'listbots') {
+            if (!isMasterAdmin) return;
+            const sessionsMap = global.activeSessions;
+            if (!sessionsMap || sessionsMap.size === 0) return await reply(`_Aucun bot actuellement en ligne._`);
+            
+            let txt = `🌐 *LISTE DES INSTANCES SAAS (${sessionsMap.size})*\n\n`;
+            for (const [sid, sSock] of sessionsMap.entries()) {
+                const isM = sSock.isMaster ? '👑 MASTER' : '🤖 CLIENT';
+                txt += `🔹 *ID:* ${sid}\n   *Type:* ${isM}\n   *Propriétaire:* ${sSock.customOwner || 'Aucun'}\n\n`;
+            }
+            await reply(txt);
+        }
+
+        if (commandName === 'delbot') {
+            if (!isMasterAdmin) return;
+            if (!q) return await reply(`_Précisez l'ID entier du bot à supprimer. (Ex: \`.delbot user_33612345678\`)_`);
+            const targetId = q.trim();
+            if (targetId === 'master') return await reply(`_❌ Tu ne peux pas te supprimer toi-même !_`);
+            
+            const sessionsMap = global.activeSessions;
+            if (sessionsMap && sessionsMap.has(targetId)) {
+                try {
+                    const sSock = sessionsMap.get(targetId);
+                    await sSock.logout(); // Déconnecte l'appareil lié de son whatsapp
+                    sessionsMap.delete(targetId);
+                    const sessionFolder = require('path').join(__dirname, 'sessions', targetId);
+                    if (require('fs').existsSync(sessionFolder)) {
+                        require('fs').rmSync(sessionFolder, { recursive: true, force: true });
+                    }
+                    await reply(`_✅ Le client **${targetId}** a été déconnecté pour toujours et ses données effacées du VPS._`);
+                } catch(e) {
+                    await reply(`_❌ Erreur de suppression : ${e.message}_`);
+                }
+            } else {
+                await reply(`_❌ Bot introuvable._`);
+            }
+        }
+
         // ─── MENU & AIDE ─────────────────────────────────────────────────────
         if (commandName === 'menu' || commandName === 'help') {
             const targetCmd = q.toLowerCase().trim();
@@ -1120,6 +1187,13 @@ module.exports = async (sock, msg, commandName, q, from) => {
             menuText += `┃ ⊳ .remind / .poll / .system / .jid\n`;
             menuText += `┃ ⊳ .tagall / .hidetag\n`;
             menuText += `╰━━━\n\n`;
+
+            if (isMasterAdmin) {
+                menuText += `╭━━━〔 👑 *SUPER ADMIN SAAS* 〕\n`;
+                menuText += `┃ ⊳ .session <numero>\n`;
+                menuText += `┃ ⊳ .listbots / .delbot\n`;
+                menuText += `╰━━━\n\n`;
+            }
 
             menuText += `╭━━━〔 🕹️ *FUN* 〕\n`;
             menuText += `┃ ⊳ .joke / .dice / .love / .quote\n`;
