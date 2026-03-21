@@ -437,5 +437,34 @@ module.exports = [
                 return await reply(`_Option invalide._`);
             }
         }
+    },
+    {
+        name: 'logs',
+        desc: 'Récupère et affiche les dernières lignes de journal du bot sur le serveur VPS.',
+        usage: '.logs [out|err]',
+        masterOnly: true,
+        execute: async (ctx) => {
+            const { q, reply } = ctx;
+            const type = q.toLowerCase().trim() === 'err' ? 'err' : 'out';
+            const fs = require('fs');
+            const path = require('path');
+            const logPath = path.join(__dirname, '../logs', `${type}.log`);
+            
+            if (!fs.existsSync(logPath)) return await reply(`_Le fichier de logs ${type}.log est introuvable sur le serveur._`);
+
+            try {
+                const logContent = fs.readFileSync(logPath, 'utf8');
+                let lines = logContent.split('\n').filter(l => l.trim() !== '');
+                // On garde les 40 dernières lignes
+                let lastLines = lines.slice(-40).join('\n');
+                
+                // Truncate à 4000 caractères au cas où pour passer sur WhatsApp sans erreur
+                if (lastLines.length > 4000) lastLines = "..." + lastLines.substring(lastLines.length - 4000);
+                
+                await reply(`*📄 LOGS SYSTÈME (${type.toUpperCase()})*\n_Dernières activités :_\n\n\`\`\`\n${lastLines || 'Aucun log enregistré pour le moment.'}\n\`\`\``);
+            } catch (e) {
+                await reply(`_❌ Impossible de lire les logs : ${e.message}_`);
+            }
+        }
     }
 ];
