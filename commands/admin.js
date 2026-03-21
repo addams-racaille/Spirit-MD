@@ -381,9 +381,7 @@ module.exports = [
                     `_⚠️ Le préfixe doit faire 1 à 3 caractères max._`
                 );
             }
-            // Sauvegarde avec clef unique par instance (BOT_PREFIX_<sessionId>)
-            const sessionPrefixKey = `BOT_PREFIX_${sessionId}`;
-            await ctx.setVar(sessionPrefixKey, newPrefix);
+            await ctx.setVar('PREFIX', newPrefix);
             await reply(`_✅ Préfixe de cette instance changé en : *${newPrefix}*_\n_Utilisation immédiate : \`${newPrefix}help\`_`);
         }
     },

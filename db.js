@@ -137,10 +137,7 @@ async function setSessionVar(sessionId, key, value) {
 async function getSessionVar(sessionId, key, defaultValue = null) {
     const sessionKey = `${sessionId}:${key}`;
     const row = await db.get('SELECT value FROM settings WHERE key = ?', [sessionKey]);
-    if (row) return row.value;
-    // Fallback vers clé globale
-    const globalRow = await db.get('SELECT value FROM settings WHERE key = ?', [key]);
-    return globalRow ? globalRow.value : defaultValue;
+    return row ? row.value : defaultValue;
 }
 
 // ── Exceptions (groupes ou users ignorés par session) ──
