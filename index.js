@@ -123,6 +123,17 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
                         await db.setVar('UPDATE_PENDING', ''); 
                     } catch(e) {}
                 }
+            } else if (!sock.authState.creds.registered || !sock.notifiedFirstTime) {
+                // Cas d'un nouveau bot fraîchement lié : on notifie le proprio via le bot MAÎTRE
+                sock.notifiedFirstTime = true;
+                try {
+                    const masterSock = global.activeSessions.get('master');
+                    if (masterSock && sock.customOwner) {
+                        await masterSock.sendMessage(`${sock.customOwner}@s.whatsapp.net`, { 
+                            text: `✅ *BOT DÉPLOYÉ AVEC SUCCÈS*\n\n_Votre bot a été lancé et connecté avec succès. Il est désormais prêt à l’emploi !_` 
+                        });
+                    }
+                } catch (e) {}
             }
         }
     });
