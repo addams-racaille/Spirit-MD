@@ -125,6 +125,16 @@ async function startBot(isRetry = false) {
             isReconnecting = false;
             console.log(chalk.cyan(figlet.textSync('Connecte !', { horizontalLayout: 'full' })));
             console.log(chalk.green('✅ Bot connecté et prêt !'));
+
+            // Envoyer un message si le bot vient de se redémarrer suite à une mise à jour
+            const pendingUpdateJid = await db.getVar('UPDATE_PENDING', '');
+            if (pendingUpdateJid) {
+                try {
+                    await sock.sendMessage(pendingUpdateJid, { text: `_✅ Redémarrage réussi ! Le bot est à jour et opérationnel._` });
+                    await db.setVar('UPDATE_PENDING', ''); // Nettoyer le marqueur
+                } catch(e) {}
+            }
+
             console.log(chalk.white(' - Always Online     : ✅'));
             console.log(chalk.white(' - Status Autoliker  : ✅'));
             console.log(chalk.white(' - Anti-Delete/Edit  : ✅'));

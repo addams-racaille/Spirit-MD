@@ -1035,6 +1035,9 @@ module.exports = async (sock, msg, commandName, q, from) => {
                 
                 await reply(`_🚀 Mise à jour téléchargée avec succès._\n\n\`\`\`${output}\`\`\`\n\n_Redémarrage en cours (Patientez 5 secondes)..._`);
                 
+                // Prévenir le bot qu'il doit envoyer un message après le redémarrage
+                await db.setVar('UPDATE_PENDING', from);
+
                 // Quitter proprement pour que PM2 relance le bot
                 setTimeout(() => process.exit(0), 1000);
             });
