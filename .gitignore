@@ -1,6 +1,10 @@
 node_modules/
 session/
+sessions/
 tmp/
+temp/
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
 .env
 logs/

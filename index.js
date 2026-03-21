@@ -13,31 +13,18 @@ const path = require('path');
 const db = require('./db');
 const config = require('./config');
 
-const handleStatus = require('./events/statusReader');
-const handleAntiDelete = require('./events/antiDelete');
-const handleAntiEdit = require('./events/antiEdit');
+const commandHandler = require('./handlers/commandHandler');
+const messageHandler = require('./events/messageHandler');
 
 const baileysLogger = pino({ level: 'silent' });
 const NodeCache = require('node-cache');
-const messageCache = new NodeCache({ stdTTL: 86400, checkperiod: 3600, useClones: false });
+
+// Optimisation Majeure : TTL à 15 mins au lieu de 24h pour ne pas saturer la RAM avec les SaaS
+const messageCache = new NodeCache({ stdTTL: 900, checkperiod: 120, useClones: false });
 
 // ─── VARIABLES GLOBALES ────────────────────────────────────────────────────────
-global.activeSessions = new Map(); // Garde en mémoire les instances allumées
+global.activeSessions = new Map();
 global.dbReady = false;
-
-function getBody(msg) {
-    const m = msg.message;
-    if (!m) return '';
-    return (
-        m.conversation ||
-        m.extendedTextMessage?.text ||
-        m.imageMessage?.caption ||
-        m.videoMessage?.caption ||
-        m.buttonsResponseMessage?.selectedButtonId ||
-        m.listResponseMessage?.singleSelectReply?.selectedRowId ||
-        ''
-    );
-}
 
 // ─── BOT SaaS ──────────────────────────────────────────────────────────────────
 async function startBot(sessionId = 'master', isMaster = false, requestNumber = null) {
@@ -142,63 +129,8 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
-
         for (const msg of messages) {
-            if (!msg.message) continue;
-
-            const from = msg.key.remoteJid;
-            const isFromMe = msg.key.fromMe;
-            const pushName = msg.pushName || 'Inconnu';
-            
-            if (from !== 'status@broadcast') {
-                db.logMessage(msg).catch(() => {});
-            } else {
-                handleStatus(sock, msg).catch(() => {});
-                continue;
-            }
-
-            if (msg.key.id) {
-                messageCache.set(msg.key.id, msg);
-            }
-
-            handleAntiDelete(sock, msg, messageCache).catch(() => {});
-            handleAntiEdit(sock, msg, messageCache).catch(() => {});
-
-            const body = getBody(msg);
-
-            // Blacklist (Partagé globalement pour tout le serveur)
-            if (from.endsWith('@g.us') && body && !isFromMe) {
-                const participant = msg.key.participant || from;
-                const exceptions = await db.getExceptions();
-                
-                if (participant !== `${sock.customOwner}@s.whatsapp.net` && !exceptions.includes(participant)) {
-                    const blacklisted = await db.getBlacklistWords();
-                    const bodyLower = body.toLowerCase();
-                    const foundWord = blacklisted.find(w => bodyLower.includes(w));
-                    if (foundWord) {
-                        try {
-                            await sock.sendMessage(from, { delete: msg.key });
-                            await sock.sendMessage(from, { text: `_⚠️ @${participant.split('@')[0]}, interdit._`, mentions: [participant] });
-                            continue;
-                        } catch (e) {}
-                    }
-                }
-            }
-
-            // Commandes
-            if (body && body.startsWith(config.PREFIX)) {
-                console.log(chalk.blue(`[CMD][${sessionId}] ${pushName}: ${body}`));
-                const args = body.slice(config.PREFIX.length).trim().split(/ +/);
-                const commandName = args.shift().toLowerCase();
-                const q = args.join(' ');
-                
-                try {
-                    require('./commands')(sock, msg, commandName, q, from, messageCache)
-                        .catch(e => console.log(chalk.red('[CMD REJET]'), e.message));
-                } catch (e) {
-                    console.log(chalk.red('[CMD ERR]'), e.message);
-                }
-            }
+            await messageHandler(sock, msg, messageCache);
         }
     });
 
@@ -209,6 +141,9 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
 (async () => {
     await db.initDB();
     global.dbReady = true;
+
+    console.log(chalk.blue('Chargement des modules de commandes...'));
+    commandHandler.loadCommands(); // Charge the commands into memory
 
     // Migrer l'ancien dossier `session` vers `sessions/master` si besoin
     if (fs.existsSync(path.join(__dirname, 'session')) && !fs.existsSync(path.join(__dirname, 'sessions', 'master'))) {
@@ -228,7 +163,6 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
     } else {
         // Lancer chaque dossier détecté
         for (const f of folders) {
-            // Le nom d'un sous-bot contient le numéro (ex: user_33612...) on l'extrait si s'en est un
             const isMaster = (f === 'master');
             const ownerMatch = f.match(/^user_(\d+)$/);
             const subOwner = ownerMatch ? ownerMatch[1] : null;
