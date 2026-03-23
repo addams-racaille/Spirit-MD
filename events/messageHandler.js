@@ -5,6 +5,27 @@ const commandHandler = require('../handlers/commandHandler');
 const handleAntiDelete = require('./antiDelete');
 const handleAntiEdit = require('./antiEdit');
 const handleStatus = require('./statusReader');
+// Import au niveau module pour éviter le require() dans la boucle chaude
+const handleAntiViewOnce = require('./antiViewOnce');
+
+// Cache en mémoire pour les réglages par session (évite une requête DB par message)
+const sessionVarCache = new Map(); // key: "sessionId:KEY" → { value, expiresAt }
+const SESSION_CACHE_TTL = 30000; // 30 secondes
+
+async function getCachedSessionVar(sessionId, key, defaultValue) {
+    const cacheKey = `${sessionId}:${key}`;
+    const now = Date.now();
+    const cached = sessionVarCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const value = await db.getSessionVar(sessionId, key, defaultValue);
+    sessionVarCache.set(cacheKey, { value, expiresAt: now + SESSION_CACHE_TTL });
+    return value;
+}
+
+// Invalide le cache quand une commande modifie un réglage
+function invalidateSessionCache(sessionId, key) {
+    sessionVarCache.delete(`${sessionId}:${key}`);
+}
 
 function getBody(msg) {
     const m = msg.message;
@@ -24,167 +45,178 @@ module.exports = async (sock, msg, messageCache) => {
     if (!msg.message) return;
 
     const from = msg.key.remoteJid;
+    if (!from) return;
+
     const isFromMe = msg.key.fromMe;
     const pushName = msg.pushName || 'Inconnu';
     const sessionId = sock.customSessionId || 'master';
-    
-    if (from !== 'status@broadcast') {
-        db.logMessage(msg).catch(() => {});
-    } else {
+
+    // Traitement des statuts
+    if (from === 'status@broadcast') {
         handleStatus(sock, msg).catch(() => {});
         return;
     }
 
+    // Log du message en DB (asynchrone, non bloquant)
+    db.logMessage(msg).catch(() => {});
+
+    // Cache du message pour anti-delete/edit
     if (msg.key.id) {
-        messageCache.set(msg.key.id, msg); 
+        messageCache.set(msg.key.id, msg);
     }
 
+    // Events de modération passive (parallélisés)
     handleAntiDelete(sock, msg, messageCache).catch(() => {});
     handleAntiEdit(sock, msg, messageCache).catch(() => {});
-    
-    // Anti-VV interceptor
-    const handleAntiViewOnce = require('./antiViewOnce');
     handleAntiViewOnce(sock, msg).catch(() => {});
 
-    // Auto-read verification (par session)
-    const autoReadStatus = await db.getSessionVar(sessionId, 'AUTO_READ', 'off');
-    if (autoReadStatus === 'on' && msg.key.remoteJid !== 'status@broadcast') {
+    // Auto-read (avec cache)
+    const autoReadStatus = await getCachedSessionVar(sessionId, 'AUTO_READ', 'off');
+    if (autoReadStatus === 'on') {
         sock.readMessages([msg.key]).catch(() => {});
     }
 
     const body = getBody(msg);
+    const isGroup = from.endsWith('@g.us');
 
-    // Modération Automatique (Groupes)
-    if (from.endsWith('@g.us') && body && !isFromMe) {
+    // ── Modération automatique (Groupes) ──────────────────────────────────────
+    let isSenderAdmin = false; // calculé une seule fois et réutilisé
+
+    if (isGroup && body && !isFromMe) {
         const participant = msg.key.participant || from;
-        const exceptions = await db.getExceptions(sessionId);
-        
-        if (participant !== `${sock.customOwner || config.OWNER_NUMBER}@s.whatsapp.net` && !exceptions.includes(participant)) {
-            
-            let isSenderAdmin = false;
-            try {
-                const groupMeta = await sock.groupMetadata(from);
-                isSenderAdmin = groupMeta.participants.find(p => p.id === participant)?.admin;
-            } catch (e) {}
+        const ownerJid = `${sock.customOwner || config.OWNER_NUMBER}@s.whatsapp.net`;
 
-            // S'il n'est pas admin, on applique les filtres
-            if (!isSenderAdmin) {
-                // 1. Anti-Link (Bloque TOUS les liens)
-                const isAntiLink = await db.getSessionVar(sessionId, 'ANTI_LINK', 'off');
-                if (isAntiLink === 'on') {
-                    const linkRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)|wa\.me|chat\.whatsapp\.com/gi;
-                    if (linkRegex.test(body)) {
-                        try {
-                            await sock.sendMessage(from, { delete: msg.key });
-                            await sock.sendMessage(from, { text: `_⚠️ @${participant.split('@')[0]}, les liens sont strictement interdits._`, mentions: [participant] });
-                            return; // Arrêt
-                        } catch (e) {}
+        if (participant !== ownerJid) {
+            const exceptions = await db.getExceptions(sessionId);
+
+            if (!exceptions.includes(participant)) {
+                // Récupération admins du groupe (une seule fois)
+                try {
+                    const groupMeta = await sock.groupMetadata(from);
+                    isSenderAdmin = !!groupMeta.participants.find(p => p.id === participant)?.admin;
+                } catch (e) {}
+
+                if (!isSenderAdmin) {
+                    // 1. Anti-Link
+                    const isAntiLink = await getCachedSessionVar(sessionId, 'ANTI_LINK', 'off');
+                    if (isAntiLink === 'on') {
+                        const linkRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)|wa\.me|chat\.whatsapp\.com/gi;
+                        if (linkRegex.test(body)) {
+                            try {
+                                await sock.sendMessage(from, { delete: msg.key });
+                                await sock.sendMessage(from, {
+                                    text: `_⚠️ @${participant.split('@')[0]}, les liens sont strictement interdits._`,
+                                    mentions: [participant]
+                                });
+                            } catch (e) {}
+                            return;
+                        }
                     }
-                }
 
-                // 2. Blacklist de mots (par session)
-                const blacklisted = await db.getBlacklistWords(sessionId);
-                const bodyLower = body.toLowerCase();
-                const foundWord = blacklisted.find(w => bodyLower.includes(w));
-                if (foundWord) {
-                    try {
-                        await sock.sendMessage(from, { delete: msg.key });
-                        await sock.sendMessage(from, { text: `_⚠️ @${participant.split('@')[0]}, ce mot est blacklisté._`, mentions: [participant] });
-                        return; // Arrêt
-                    } catch (e) {}
+                    // 2. Blacklist de mots
+                    const blacklisted = await db.getBlacklistWords(sessionId);
+                    if (blacklisted.length > 0) {
+                        const bodyLower = body.toLowerCase();
+                        const foundWord = blacklisted.find(w => bodyLower.includes(w));
+                        if (foundWord) {
+                            try {
+                                await sock.sendMessage(from, { delete: msg.key });
+                                await sock.sendMessage(from, {
+                                    text: `_⚠️ @${participant.split('@')[0]}, ce mot est blacklisté._`,
+                                    mentions: [participant]
+                                });
+                            } catch (e) {}
+                            return;
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Traitement des commandes (préfixe dynamique par instance depuis la DB)
-    // Priorité : clef spécifique à la session > clef globale > config.PREFIX
-    const currentPrefix = await db.getSessionVar(sessionId, 'PREFIX', config.PREFIX);
-    if (body && body.startsWith(currentPrefix)) {
-        const args = body.slice(currentPrefix.length).trim().split(/ +/);
-        const commandName = args.shift().toLowerCase();
-        const q = args.join(' ');
-        
-        const cmd = commandHandler.getCommand(commandName);
-        if (cmd) {
-            console.log(chalk.blue(`[CMD][${sessionId}] ${pushName}: ${body}`));
-            
+    // ── Traitement des commandes ──────────────────────────────────────────────
+    const currentPrefix = await getCachedSessionVar(sessionId, 'PREFIX', config.PREFIX);
+    if (!body || !body.startsWith(currentPrefix)) return;
+
+    const args = body.slice(currentPrefix.length).trim().split(/ +/);
+    const commandName = args.shift().toLowerCase();
+    const q = args.join(' ');
+
+    const cmd = commandHandler.getCommand(commandName);
+    if (!cmd) return;
+
+    console.log(chalk.blue(`[CMD][${sessionId}] ${pushName}: ${body}`));
+
+    try {
+        const currentMode = await getCachedSessionVar(sessionId, 'MODE', 'public');
+        const senderJid = msg.key.participant || msg.key.remoteJid;
+        const ownerNumberStr = sock.customOwner || config.OWNER_NUMBER || '';
+        const isOwner = isFromMe || senderJid === `${ownerNumberStr}@s.whatsapp.net`;
+        const isMasterAdmin = isOwner && sock.isMaster;
+
+        // Réutilise isSenderAdmin si déjà calculé pour modération, sinon le calcule
+        if (isGroup && !isSenderAdmin) {
             try {
-                const currentMode = await db.getSessionVar(sessionId, 'MODE', 'public');
-                const senderJid = msg.key.participant || msg.key.remoteJid;
-                const ownerNumberStr = sock.customOwner || config.OWNER_NUMBER || '';
-                const isOwner = isFromMe || senderJid === `${ownerNumberStr}@s.whatsapp.net`;
-                const isMasterAdmin = isOwner && sock.isMaster;
-
-                let isSenderAdmin = false;
-                if (from.endsWith('@g.us')) {
-                    try {
-                        const groupMeta = await sock.groupMetadata(from);
-                        isSenderAdmin = !!groupMeta.participants.find(p => p.id === senderJid)?.admin;
-                    } catch (e) {}
-                }
-
-                if (currentMode === 'private' && !isOwner) { return; }
-
-                if (cmd.ownerOnly && !isOwner) {
-                    await sock.sendMessage(from, { text: `_❌ Seul le propriétaire du bot peut utiliser cette commande._` }, { quoted: msg });
-                    return;
-                }
-
-                if (cmd.adminOnly && !isOwner && !isSenderAdmin) {
-                    await sock.sendMessage(from, { text: `_❌ Cette commande nécessite d'être administrateur du groupe ou propriétaire du bot._` }, { quoted: msg });
-                    return;
-                }
-
-                if (cmd.masterOnly && !isMasterAdmin) {
-                    await sock.sendMessage(from, { text: `_❌ Commande strictement réservée au Maître._` }, { quoted: msg });
-                    return;
-                }
-
-                if (cmd.groupOnly && !from.endsWith('@g.us')) {
-                    await sock.sendMessage(from, { text: `_❌ Cette commande ne fonctionne que dans les groupes._` }, { quoted: msg });
-                    return;
-                }
-
-                const reply = async (text, options = {}) => {
-                    return await sock.sendMessage(from, { text, ...options }, { quoted: msg });
-                };
-
-                const editMsg = async (sentMsg, newText) => {
-                    try {
-                        await sock.sendMessage(from, { text: newText, edit: sentMsg.key });
-                    } catch(e) {
-                        await sock.sendMessage(from, { text: newText });
-                    }
-                };
-
-                // Helpers de paramètres isolés par session
-                // ctx.getVar('MODE', 'public') lit 'master:MODE' ou 'client1:MODE'
-                const getVar = (key, def) => db.getSessionVar(sessionId, key, def);
-                const setVar = (key, val) => db.setSessionVar(sessionId, key, val);
-                
-                const getExceptions = () => db.getExceptions(sessionId);
-                const addException = (jid) => db.addException(sessionId, jid);
-                const removeException = (jid) => db.removeException(sessionId, jid);
-                
-                const getBlacklistWords = () => db.getBlacklistWords(sessionId);
-                const addBlacklistWord = (word) => db.addBlacklistWord(sessionId, word);
-                const removeBlacklistWord = (word) => db.removeBlacklistWord(sessionId, word);
-
-                const ctx = {
-                    sock, msg, commandName, q, args, from, messageCache,
-                    isOwner, isMasterAdmin, currentMode, reply, editMsg, pushName, sessionId,
-                    currentPrefix, getVar, setVar,
-                    getExceptions, addException, removeException,
-                    getBlacklistWords, addBlacklistWord, removeBlacklistWord
-                };
-
-                await cmd.execute(ctx);
-                
-            } catch (e) {
-                console.log(chalk.red('[CMD ERR]'), e.message);
-                await sock.sendMessage(from, { text: `_❌ Erreur d'exécution: ${e.message}_` }, { quoted: msg });
-            }
+                const groupMeta = await sock.groupMetadata(from);
+                isSenderAdmin = !!groupMeta.participants.find(p => p.id === senderJid)?.admin;
+            } catch (e) {}
         }
+
+        if (currentMode === 'private' && !isOwner) return;
+        if (cmd.ownerOnly && !isOwner) {
+            return await sock.sendMessage(from, { text: `_❌ Seul le propriétaire du bot peut utiliser cette commande._` }, { quoted: msg });
+        }
+        if (cmd.adminOnly && !isOwner && !isSenderAdmin) {
+            return await sock.sendMessage(from, { text: `_❌ Cette commande nécessite d'être administrateur du groupe ou propriétaire du bot._` }, { quoted: msg });
+        }
+        if (cmd.masterOnly && !isMasterAdmin) {
+            return await sock.sendMessage(from, { text: `_❌ Commande strictement réservée au Maître._` }, { quoted: msg });
+        }
+        if (cmd.groupOnly && !isGroup) {
+            return await sock.sendMessage(from, { text: `_❌ Cette commande ne fonctionne que dans les groupes._` }, { quoted: msg });
+        }
+
+        const reply = async (text, options = {}) =>
+            await sock.sendMessage(from, { text, ...options }, { quoted: msg });
+
+        const editMsg = async (sentMsg, newText) => {
+            try {
+                await sock.sendMessage(from, { text: newText, edit: sentMsg.key });
+            } catch (e) {
+                await sock.sendMessage(from, { text: newText });
+            }
+        };
+
+        // Wrappers session-isolés avec invalidation du cache sur écriture
+        const getVar = (key, def) => getCachedSessionVar(sessionId, key, def);
+        const setVar = async (key, val) => {
+            await db.setSessionVar(sessionId, key, val);
+            invalidateSessionCache(sessionId, key);
+        };
+
+        const getExceptions = () => db.getExceptions(sessionId);
+        const addException = (jid) => db.addException(sessionId, jid);
+        const removeException = (jid) => db.removeException(sessionId, jid);
+
+        const getBlacklistWords = () => db.getBlacklistWords(sessionId);
+        const addBlacklistWord = (word) => db.addBlacklistWord(sessionId, word);
+        const removeBlacklistWord = (word) => db.removeBlacklistWord(sessionId, word);
+
+        const ctx = {
+            sock, msg, commandName, q, args, from, messageCache,
+            isOwner, isMasterAdmin, isSenderAdmin, currentMode,
+            reply, editMsg, pushName, sessionId,
+            currentPrefix, getVar, setVar,
+            getExceptions, addException, removeException,
+            getBlacklistWords, addBlacklistWord, removeBlacklistWord,
+        };
+
+        await cmd.execute(ctx);
+
+    } catch (e) {
+        console.log(chalk.red('[CMD ERR]'), e.message);
+        try {
+            await sock.sendMessage(from, { text: `_❌ Erreur d'exécution: ${e.message}_` }, { quoted: msg });
+        } catch {}
     }
 };

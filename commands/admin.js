@@ -1,4 +1,7 @@
 const db = require('../db');
+const fs = require('fs');
+const fsp = require('fs').promises;
+const path = require('path');
 
 module.exports = [
     {
@@ -55,13 +58,15 @@ module.exports = [
             const { q, reply, sock, msg } = ctx;
             if (!q) return await reply(`_⚠️ Fournis du code JS à évaluer._`);
             try {
-                // Créer un environnement riche pour l'évaluation
                 const evalCmd = `(async () => { ${q.includes('await') ? q : `return ${q}`} })()`;
                 const result = await eval(evalCmd);
-                const output = require('util').inspect(result, { depth: 2 });
+                let output = require('util').inspect(result, { depth: 4, colors: false });
+                if (output.length > 3500) output = output.slice(0, 3500) + '\n...[tronqué]';
                 await reply(`*✅ Évaluation Réussie*\n\`\`\`javascript\n${output}\n\`\`\``);
             } catch (e) {
-                await reply(`*❌ Échec de l'évaluation*\n\`\`\`javascript\n${e.stack}\n\`\`\``);
+                let stack = e.stack || e.message;
+                if (stack.length > 3500) stack = stack.slice(0, 3500) + '\n...[tronqué]';
+                await reply(`*❌ Échec de l'évaluation*\n\`\`\`javascript\n${stack}\n\`\`\``);
             }
         }
     },
@@ -116,9 +121,9 @@ module.exports = [
             try {
                 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
                 const stream = await downloadContentFromMessage(mediaMessage, 'image');
-                let buffer = Buffer.from([]);
-                for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-                
+                const chunks = [];
+                for await (const chunk of stream) chunks.push(chunk);
+                const buffer = Buffer.concat(chunks);
                 await sock.updateProfilePicture(sock.user.id, buffer);
                 await reply(`_✅ Magnifique ! Ma nouvelle photo de profil est en place._`);
             } catch (e) {
@@ -445,21 +450,16 @@ module.exports = [
         execute: async (ctx) => {
             const { q, reply } = ctx;
             const type = q.toLowerCase().trim() === 'err' ? 'err' : 'out';
-            const fs = require('fs');
-            const path = require('path');
             const logPath = path.join(__dirname, '../logs', `${type}.log`);
-            
+
             if (!fs.existsSync(logPath)) return await reply(`_Le fichier de logs ${type}.log est introuvable sur le serveur._`);
 
             try {
-                const logContent = fs.readFileSync(logPath, 'utf8');
+                // Lecture asynchrone pour ne pas bloquer l'event loop
+                const logContent = await fsp.readFile(logPath, 'utf8');
                 let lines = logContent.split('\n').filter(l => l.trim() !== '');
-                // On garde les 40 dernières lignes
                 let lastLines = lines.slice(-40).join('\n');
-                
-                // Truncate à 4000 caractères au cas où pour passer sur WhatsApp sans erreur
-                if (lastLines.length > 4000) lastLines = "..." + lastLines.substring(lastLines.length - 4000);
-                
+                if (lastLines.length > 4000) lastLines = '...' + lastLines.slice(-4000);
                 await reply(`*📄 LOGS SYSTÈME (${type.toUpperCase()})*\n_Dernières activités :_\n\n\`\`\`\n${lastLines || 'Aucun log enregistré pour le moment.'}\n\`\`\``);
             } catch (e) {
                 await reply(`_❌ Impossible de lire les logs : ${e.message}_`);

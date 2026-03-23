@@ -10,7 +10,12 @@ async function initDB() {
         driver: sqlite3.Database
     });
 
-    await db.exec('PRAGMA journal_mode = WAL;'); // Optimisation de performance essentielle pour VPS
+    // WAL pour les écritures concurrentes + perf générale
+    await db.exec('PRAGMA journal_mode = WAL;');
+    await db.exec('PRAGMA synchronous = NORMAL;');
+    await db.exec('PRAGMA cache_size = -8000;'); // 8 MB de cache
+    await db.exec('PRAGMA temp_store = MEMORY;');
+    await db.exec('PRAGMA foreign_keys = ON;');
 
     await db.exec(`
         CREATE TABLE IF NOT EXISTS users (
@@ -30,16 +35,14 @@ async function initDB() {
         )
     `);
 
+    // Index pour les requêtes fréquentes
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_chatJid ON users(chatJid);`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_totalMessages ON users(totalMessages DESC);`);
+
     await db.exec(`
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
-        )
-    `);
-
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS exceptions (
-            jid TEXT PRIMARY KEY
         )
     `);
 
@@ -52,14 +55,13 @@ async function initDB() {
         )
     `);
 
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS blacklist (
-            word TEXT PRIMARY KEY
-        )
-    `);
-    
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_warnings_chat ON warnings(jid, chatJid);`);
+
     console.log('📦 Base de données SQLite prête.');
 }
+
+// Types de messages autorisés (évite l'injection SQL via colonne dynamique)
+const ALLOWED_TYPES = new Set(['text', 'image', 'video', 'audio', 'sticker', 'other']);
 
 async function logMessage(msg) {
     if (!db) return;
@@ -67,43 +69,64 @@ async function logMessage(msg) {
 
     const jid = msg.key.participant || msg.key.remoteJid;
     const chatJid = msg.key.remoteJid;
-    const name = msg.pushName || 'Inconnu';
+    if (!jid || !chatJid) return;
+
+    const name = (msg.pushName || 'Inconnu').slice(0, 100); // limite la taille
     const lastMessageAt = new Date().toISOString();
 
     const m = msg.message;
     let type = 'other';
-    
     if (m.conversation || m.extendedTextMessage) type = 'text';
     else if (m.imageMessage) type = 'image';
     else if (m.videoMessage) type = 'video';
     else if (m.audioMessage) type = 'audio';
     else if (m.stickerMessage) type = 'sticker';
 
+    // Validation stricte du type avant utilisation dans la requête SQL
+    if (!ALLOWED_TYPES.has(type)) type = 'other';
+
+    // Utilisation de colonnes statiques avec un mapping pour éviter toute injection
+    const colMap = {
+        text:    'textMessages',
+        image:   'imageMessages',
+        video:   'videoMessages',
+        audio:   'audioMessages',
+        sticker: 'stickerMessages',
+        other:   'otherMessages',
+    };
+    const col = colMap[type];
+
     await db.run(`
-        INSERT INTO users (jid, chatJid, name, totalMessages, ${type}Messages, lastMessageAt)
+        INSERT INTO users (jid, chatJid, name, totalMessages, ${col}, lastMessageAt)
         VALUES (?, ?, ?, 1, 1, ?)
         ON CONFLICT(jid, chatJid) DO UPDATE SET
             name = excluded.name,
             totalMessages = totalMessages + 1,
-            ${type}Messages = ${type}Messages + 1,
+            ${col} = ${col} + 1,
             lastMessageAt = excluded.lastMessageAt
     `, [jid, chatJid, name, lastMessageAt]);
 }
 
 async function fetchFromStore(chatJid) {
+    if (!db) return [];
     return await db.all('SELECT * FROM users WHERE chatJid = ? COLLATE NOCASE', [chatJid]);
 }
 
 async function getTopUsers(chatJid, limit = 10) {
-    return await db.all('SELECT * FROM users WHERE chatJid = ? COLLATE NOCASE ORDER BY totalMessages DESC LIMIT ?', [chatJid, limit]);
+    if (!db) return [];
+    return await db.all(
+        'SELECT * FROM users WHERE chatJid = ? COLLATE NOCASE ORDER BY totalMessages DESC LIMIT ?',
+        [chatJid, limit]
+    );
 }
 
 async function getGlobalTopUsers(limit = 10) {
+    if (!db) return [];
     return await db.all(`
-        SELECT jid, MAX(name) as name, SUM(totalMessages) as totalMessages, MAX(lastMessageAt) as lastMessageAt 
-        FROM users 
-        GROUP BY jid 
-        ORDER BY totalMessages DESC 
+        SELECT jid, MAX(name) as name, SUM(totalMessages) as totalMessages, MAX(lastMessageAt) as lastMessageAt
+        FROM users
+        GROUP BY jid
+        ORDER BY totalMessages DESC
         LIMIT ?
     `, [limit]);
 }
@@ -111,40 +134,37 @@ async function getGlobalTopUsers(limit = 10) {
 // ── Paramètres globaux (settings) ──
 
 async function setVar(key, value) {
+    if (!db) return;
     await db.run(`
         INSERT INTO settings (key, value) VALUES (?, ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `, [key, value]);
+    `, [key, String(value)]);
 }
 
 async function getVar(key, defaultValue = null) {
+    if (!db) return defaultValue;
     const row = await db.get('SELECT value FROM settings WHERE key = ?', [key]);
     return row ? row.value : defaultValue;
 }
 
-// ── Paramètres de session (isolés par instance) ──
+// ── Paramètres de session isolés par instance ──
 // Clé stockée sous la forme "<sessionId>:<key>"
-// Avec fallback vers la clé globale si pas de valeur de session
 
 async function setSessionVar(sessionId, key, value) {
     const sessionKey = `${sessionId}:${key}`;
-    await db.run(`
-        INSERT INTO settings (key, value) VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `, [sessionKey, value]);
+    await setVar(sessionKey, value);
 }
 
 async function getSessionVar(sessionId, key, defaultValue = null) {
     const sessionKey = `${sessionId}:${key}`;
-    const row = await db.get('SELECT value FROM settings WHERE key = ?', [sessionKey]);
-    return row ? row.value : defaultValue;
+    return await getVar(sessionKey, defaultValue);
 }
 
 // ── Exceptions (groupes ou users ignorés par session) ──
 
 async function getExceptions(sessionId) {
     const data = await getSessionVar(sessionId, 'EXCEPTIONS', '[]');
-    try { return JSON.parse(data); } catch(e) { return []; }
+    try { return JSON.parse(data); } catch (e) { return []; }
 }
 
 async function addException(sessionId, jid) {
@@ -164,6 +184,7 @@ async function removeException(sessionId, jid) {
 // ── Avertissements ──
 
 async function addWarning(jid, chatJid) {
+    if (!db) return 1;
     await db.run(`
         INSERT INTO warnings (jid, chatJid, count) VALUES (?, ?, 1)
         ON CONFLICT(jid, chatJid) DO UPDATE SET count = count + 1
@@ -173,11 +194,13 @@ async function addWarning(jid, chatJid) {
 }
 
 async function getWarnings(jid, chatJid) {
+    if (!db) return 0;
     const row = await db.get('SELECT count FROM warnings WHERE jid = ? AND chatJid = ?', [jid, chatJid]);
     return row ? row.count : 0;
 }
 
 async function resetWarnings(jid, chatJid) {
+    if (!db) return;
     await db.run('DELETE FROM warnings WHERE jid = ? AND chatJid = ?', [jid, chatJid]);
 }
 
@@ -185,7 +208,7 @@ async function resetWarnings(jid, chatJid) {
 
 async function getBlacklistWords(sessionId) {
     const data = await getSessionVar(sessionId, 'BLACKLIST', '[]');
-    try { return JSON.parse(data); } catch(e) { return []; }
+    try { return JSON.parse(data); } catch (e) { return []; }
 }
 
 async function addBlacklistWord(sessionId, word) {
@@ -200,6 +223,17 @@ async function removeBlacklistWord(sessionId, word) {
     let list = await getBlacklistWords(sessionId);
     list = list.filter(w => w !== word);
     await setSessionVar(sessionId, 'BLACKLIST', JSON.stringify(list));
+}
+
+// ── Nettoyage des stats anciennes ──
+async function pruneOldMessageStats(days = 90) {
+    if (!db) return;
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    const { changes } = await db.run(
+        'DELETE FROM users WHERE lastMessageAt < ? AND totalMessages < 5',
+        [cutoff]
+    );
+    if (changes > 0) console.log(`🗑️ ${changes} entrée(s) inactives supprimées de la base.`);
 }
 
 module.exports = {
@@ -220,5 +254,6 @@ module.exports = {
     resetWarnings,
     addBlacklistWord,
     removeBlacklistWord,
-    getBlacklistWords
+    getBlacklistWords,
+    pruneOldMessageStats,
 };

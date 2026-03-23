@@ -2,8 +2,8 @@ const db = require('../db');
 
 function timeSince(date) {
     if (!date) return "Jamais";
-    var seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    var interval = seconds / 31536000;
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + " ans";
     interval = seconds / 2592000;
     if (interval > 1) return Math.floor(interval) + " mois";
@@ -61,13 +61,16 @@ module.exports = [
             const participants = groupMetadata.participants;
             const userStats = await db.fetchFromStore(from);
 
+            // Map jid → stats pour lookup O(1) au lieu de O(n) par membre
+            const statsMap = new Map(userStats.map(s => [s.jid, s]));
+
             let inactiveMembers = [];
-            for (let p of participants) {
-                let jid = p.id;
-                let stat = userStats.find(s => s.jid === jid);
-                
+            for (const p of participants) {
+                const jid = p.id;
+                const stat = statsMap.get(jid);
+
                 if (!stat || !stat.lastMessageAt) {
-                    inactiveMembers.push({ jid, name: stat?.name || "Inconnu", lastMessage: "Jamais", totalMessages: stat?.totalMessages || 0 });
+                    inactiveMembers.push({ jid, name: stat?.name || 'Inconnu', lastMessage: 'Jamais', totalMessages: stat?.totalMessages || 0 });
                 } else {
                     const lastMsgDate = new Date(stat.lastMessageAt);
                     if (lastMsgDate < cutoffDate) {
@@ -126,8 +129,12 @@ module.exports = [
         adminOnly: true,
         execute: async (ctx) => {
             const { q, from, sock, msg, reply } = ctx;
-            const targetJid = msg.message?.extendedTextMessage?.contextInfo?.participant
-                           || msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+            // Résolution de la cible : réponse directe > mention
+            const ctxInfo = msg.message?.extendedTextMessage?.contextInfo
+                         || msg.message?.imageMessage?.contextInfo
+                         || msg.message?.videoMessage?.contextInfo;
+            const targetJid = ctxInfo?.participant
+                           || ctxInfo?.mentionedJid?.[0];
             if (!targetJid) return await reply(`_Réponds au message de la personne à avertir._`);
             const count = await db.addWarning(targetJid, from);
             const MAX_WARNS = 3;
@@ -136,9 +143,11 @@ module.exports = [
                 try {
                     await sock.groupParticipantsUpdate(from, [targetJid], 'remove');
                     await db.resetWarnings(targetJid, from);
-                } catch (e) {}
+                } catch (e) {
+                    await reply(`_❌ Impossible d'expulser (le bot est-il admin ?)_`);
+                }
             } else {
-                await reply(`_⚠️ @${targetJid.split('@')[0]} : ${count}/${MAX_WARNS} avertissements._\n${q ? `_Raison : ${q}_` : ''}`, { mentions: [targetJid] });
+                await reply(`_⚠️ @${targetJid.split('@')[0]} : ${count}/${MAX_WARNS} avertissements._${q ? `\n_Raison : ${q}_` : ''}`, { mentions: [targetJid] });
             }
         }
     },
@@ -225,21 +234,25 @@ module.exports = [
     {
         name: 'group',
         aliases: ['groupe'],
-        desc: 'Ouvre ou Ferme le canal de discussion vocal/écrit du groupe aux non-admins.',
+        desc: 'Ouvre ou Ferme le canal de discussion du groupe aux non-admins.',
         usage: '.group open / .group close',
         groupOnly: true,
         adminOnly: true,
         execute: async (ctx) => {
             const { q, from, sock, reply } = ctx;
-            if (q === 'open' || q === 'ouvert') {
-                await sock.groupSettingUpdate(from, 'not_announcement');
-                await reply(`_🔓 Le groupe est ouvert à tous les membres._`);
-            } else if (q === 'close' || q === 'fermé') {
-                await sock.groupSettingUpdate(from, 'announcement');
-                await reply(`_🔒 Le groupe est fermé. Seuls les admins peuvent parler._`);
-            } else {
-                const p = ctx.currentPrefix || '.';
-                await reply(`_Utilisation : \`${p}group open\` ou \`${p}group close\`_`);
+            try {
+                if (q === 'open' || q === 'ouvert') {
+                    await sock.groupSettingUpdate(from, 'not_announcement');
+                    await reply(`_🔓 Le groupe est ouvert à tous les membres._`);
+                } else if (q === 'close' || q === 'fermé' || q === 'ferme') {
+                    await sock.groupSettingUpdate(from, 'announcement');
+                    await reply(`_🔒 Le groupe est fermé. Seuls les admins peuvent parler._`);
+                } else {
+                    const p = ctx.currentPrefix || '.';
+                    await reply(`_Utilisation : \`${p}group open\` ou \`${p}group close\`_`);
+                }
+            } catch (e) {
+                await reply(`_❌ Impossible de modifier le groupe (le bot est-il admin ?) : ${e.message}_`);
             }
         }
     },

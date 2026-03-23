@@ -1,6 +1,8 @@
 const os = require('os');
 const db = require('../db');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -145,27 +147,27 @@ module.exports = [
         usage: '.pm2list',
         masterOnly: true,
         execute: async (ctx) => {
-            exec('pm2 jlist', (err, stdout) => {
-                if (err) return ctx.reply(`_❌ PM2 introuvable._`);
-                try {
-                    const list = JSON.parse(stdout);
-                    if (list.length === 0) return ctx.reply(`_Aucun processus PM2 en cours._`);
-                    let res = `📋 *PROCESSUS (PM2)*\n`;
-                    res += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                    list.forEach(p => {
-                        const statusColor = p.pm2_env.status === 'online' ? '🟢' : '🔴';
-                        res += `🤖 *${p.name.toUpperCase()}* [ID: ${p.pm_id}]\n`;
-                        res += `   État   : ${statusColor} ${p.pm2_env.status}\n`;
-                        res += `   CPU    : [${makeBar(p.monit.cpu)}] ${p.monit.cpu}%\n`;
-                        res += `   RAM    : ${formatBytes(p.monit.memory)}\n`;
-                        res += `   Uptime : ${formatUptime((Date.now() - p.pm2_env.pm_uptime)/1000)}\n`;
-                        res += `   Restarts: ${p.pm2_env.restart_time}\n\n`;
-                    });
-                    ctx.reply(res);
-                } catch (e) {
-                    ctx.reply(`_❌ Erreur de format des données._`);
-                }
-            });
+            try {
+                const { stdout } = await execAsync('pm2 jlist', { timeout: 10000 });
+                const list = JSON.parse(stdout);
+                if (!list.length) return await ctx.reply(`_Aucun processus PM2 en cours._`);
+                let res = `📋 *PROCESSUS (PM2)*\n`;
+                res += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                list.forEach(p => {
+                    const statusColor = p.pm2_env.status === 'online' ? '🟢' : '🔴';
+                    const cpu = p.monit?.cpu ?? 0;
+                    const memory = p.monit?.memory ?? 0;
+                    res += `🤖 *${p.name.toUpperCase()}* [ID: ${p.pm_id}]\n`;
+                    res += `   État   : ${statusColor} ${p.pm2_env.status}\n`;
+                    res += `   CPU    : [${makeBar(cpu)}] ${cpu}%\n`;
+                    res += `   RAM    : ${formatBytes(memory)}\n`;
+                    res += `   Uptime : ${formatUptime((Date.now() - p.pm2_env.pm_uptime) / 1000)}\n`;
+                    res += `   Restarts: ${p.pm2_env.restart_time}\n\n`;
+                });
+                await ctx.reply(res);
+            } catch (e) {
+                await ctx.reply(`_❌ PM2 introuvable ou erreur : ${e.message}_`);
+            }
         }
     },
     {
@@ -215,15 +217,17 @@ module.exports = [
     },
     {
         name: 'speedtest',
-        desc: 'Lance un speedtest interactif de la bande passante réseau exacte du serveur Linux.',
+        desc: 'Lance un speedtest de la bande passante réseau du serveur Linux.',
         usage: '.speedtest',
         masterOnly: true,
         execute: async (ctx) => {
-            const startMsg = await ctx.reply(`_Test de bande passante en cours (patientez environ 30s)..._`);
-            exec('npx fast-cli -u', async (err, stdout) => {
-                if (err) return await ctx.editMsg(startMsg, `_❌ Surcharge réseau : test impossible._`);
+            const startMsg = await ctx.reply(`_Test de bande passante en cours (patientez environ 20s)..._`);
+            try {
+                const { stdout } = await execAsync('npx fast-cli -u --single-line', { timeout: 60000 });
                 await ctx.editMsg(startMsg, `📊 *PERFORMANCES RÉSEAU*\n\n\`\`\`\n${stdout.trim()}\n\`\`\``);
-            });
+            } catch (e) {
+                await ctx.editMsg(startMsg, `_❌ Erreur speedtest : ${e.message}_`);
+            }
         }
     },
     {

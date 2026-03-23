@@ -6,12 +6,19 @@ module.exports = async function handleStatus(sock, msg) {
     const from = msg.key.remoteJid;
     if (from !== 'status@broadcast') return;
 
+    // Ne pas réagir à ses propres statuts
+    if (msg.key.fromMe) return;
+
     const statusMode = await db.getSessionVar(sessionId, 'AUTO_STATUS', 'like');
     if (statusMode === 'off') return;
 
     const pushName = msg.pushName || 'Inconnu';
-    const participantJid = msg.key.participant || from;
-    
+    const participantJid = msg.key.participant;
+
+    // Sans participant JID valide, on ne peut ni lire ni liker
+    if (!participantJid || participantJid === 'status@broadcast') return;
+
+    // 1. Marquer comme vu
     try {
         await sock.readMessages([{
             remoteJid: 'status@broadcast',
@@ -20,22 +27,22 @@ module.exports = async function handleStatus(sock, msg) {
         }]);
         console.log(chalk.magenta(`👀 Statut vu de : ${pushName}`));
     } catch (e) {
-        console.log(chalk.red('Err vue statut:'), e.message);
+        // Silencieux — la lecture peut échouer si le statut a expiré
     }
-    
-    // 2. Liker (réagir avec un coeur) uniquement en mode "like"
+
+    // 2. Liker uniquement en mode "like"
     if (statusMode === 'like') {
         setTimeout(async () => {
             try {
                 await sock.sendMessage(participantJid, {
-                    react: { 
-                        text: '💚', 
+                    react: {
+                        text: '💚',
                         key: msg.key
                     }
                 });
                 console.log(chalk.green(`💚 Statut liké : ${pushName}`));
             } catch (e) {
-                console.log(chalk.red('Err like statut:'), e.message);
+                // Silencieux — le like peut échouer si le statut a expiré
             }
         }, 2000);
     }

@@ -1,7 +1,7 @@
 const chalk = require('chalk');
 const db = require('../db');
+const { OWNER_NUMBER } = require('../config');
 
-// Helper : recupère le texte complet d'un objet message
 function getBody(msg) {
     const m = msg.message;
     if (!m) return '';
@@ -24,57 +24,54 @@ module.exports = async function handleAntiEdit(sock, msg, messageCache) {
 
     const editedId = proto.key?.id;
     const cached = editedId ? messageCache.get(editedId) : null;
-    
-    if (cached) {
-        // Vérifier les paramètres utilisateur (off, chat, sudo, custom JID) (par session)
-        const antiEditMode = await db.getSessionVar(sessionId, 'ANTI_EDIT', 'chat');
-        if (antiEditMode === 'off') return;
+    if (!cached) return;
 
-        const originalChat = cached.key.remoteJid;
-        const originalSender = cached.key.participant || originalChat;
-        const contactId = originalSender.split('@')[0];
+    const antiEditMode = await db.getSessionVar(sessionId, 'ANTI_EDIT', 'chat');
+    if (antiEditMode === 'off') return;
 
-        // 1. Ignorer l'Owner natif
-        const { OWNER_NUMBER } = require('../config');
-        if (OWNER_NUMBER && contactId === OWNER_NUMBER) return;
+    const originalChat = cached.key.remoteJid;
+    const originalSender = cached.key.participant || originalChat;
+    const contactId = originalSender.split('@')[0];
 
-        // 2. Ignorer les exceptions (numéro ou groupe entier, par session)
-        const exceptions = await db.getExceptions(sessionId);
-        if (exceptions.includes(originalChat) || exceptions.includes(originalSender)) return;
-        
-        const oldBody = getBody(cached) || '[Message non textuel]';
-        const newBody = proto.editedMessage?.conversation || 
-                        proto.editedMessage?.extendedTextMessage?.text || 
-                        '[inconnu]';
+    // Ignorer l'owner natif et l'owner de la session
+    if (OWNER_NUMBER && contactId === OWNER_NUMBER) return;
+    if (sock.customOwner && contactId === sock.customOwner) return;
 
-        console.log(chalk.yellow(`✏️ Modification détectée de ${contactId} (${editedId})`));
-        
-        // Déterminer où envoyer la notification
-        let targetJid = originalChat; // par défaut: 'chat'
-        
-        if (antiEditMode === 'sudo') {
-            if (OWNER_NUMBER && OWNER_NUMBER.match(/^\d+$/)) {
-                targetJid = `${OWNER_NUMBER}@s.whatsapp.net`;
-            } else {
-                targetJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-            }
-        } else if (antiEditMode === 'custom') {
-            const customJid = await db.getSessionVar(sessionId, 'ANTI_EDIT_JID', '');
-            if (customJid) targetJid = customJid;
-        }
-        
-        try {
-            await sock.sendMessage(targetJid, {
-                text: `👀 Modifié par @${contactId}\n\n*Avant :* ${oldBody}\n*Après :* ${newBody}`,
-                mentions: [originalSender]
-            }, { quoted: cached });
-            
-            // Mettre à jour le cache local pour de futures opérations
-            const newMsgContext = JSON.parse(JSON.stringify(cached));
-            newMsgContext.message = proto.editedMessage;
-            messageCache.set(editedId, newMsgContext);
-        } catch (e) {
-            console.log(chalk.red('Err anti-edit:'), e.message);
-        }
+    // Ignorer les exceptions
+    const exceptions = await db.getExceptions(sessionId);
+    if (exceptions.includes(originalChat) || exceptions.includes(originalSender)) return;
+
+    const oldBody = getBody(cached) || '[Message non textuel]';
+    const newBody =
+        proto.editedMessage?.conversation ||
+        proto.editedMessage?.extendedTextMessage?.text ||
+        '[inconnu]';
+
+    // On ne notifie que si le contenu a vraiment changé
+    if (oldBody === newBody) return;
+
+    console.log(chalk.yellow(`✏️ Modification détectée de ${contactId} (${editedId})`));
+
+    // Destination
+    let targetJid = originalChat;
+    if (antiEditMode === 'sudo') {
+        const ownerNum = sock.customOwner || OWNER_NUMBER;
+        targetJid = ownerNum ? `${ownerNum}@s.whatsapp.net` : (sock.user?.id?.split(':')[0] + '@s.whatsapp.net');
+    } else if (antiEditMode === 'custom') {
+        const customJid = await db.getSessionVar(sessionId, 'ANTI_EDIT_JID', '');
+        if (customJid) targetJid = customJid;
+    }
+
+    try {
+        await sock.sendMessage(targetJid, {
+            text: `✏️ Modifié par @${contactId}\n\n*Avant :* ${oldBody}\n*Après :* ${newBody}`,
+            mentions: [originalSender]
+        }, { quoted: cached });
+
+        // MAJ du cache avec le nouveau contenu
+        const updated = { ...cached, message: proto.editedMessage };
+        messageCache.set(editedId, updated);
+    } catch (e) {
+        console.log(chalk.red('Err anti-edit:'), e.message);
     }
 };
