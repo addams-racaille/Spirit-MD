@@ -25,8 +25,14 @@ module.exports = async (sock, msg) => {
 
         let targetJid = msg.key.remoteJid;
         if (antiVvStatus === 'sudo') {
-            const ownerNum = sock.customOwner || config.OWNER_NUMBER;
-            if (ownerNum) targetJid = `${ownerNum}@s.whatsapp.net`;
+            let ownerNum = sock.customOwner || config.OWNER_NUMBER;
+            if (ownerNum) {
+                // S'assurer que le numéro ne contient que des chiffres purs (retirer les + ou espaces)
+                ownerNum = ownerNum.toString().replace(/[^\d]/g, '');
+                targetJid = `${ownerNum}@s.whatsapp.net`;
+            } else if (sock.user && sock.user.id) {
+                targetJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+            }
         } else if (antiVvStatus === 'custom') {
             const customJid = await db.getSessionVar(sessionId, 'ANTI_VV_JID', '');
             if (customJid) targetJid = customJid;
