@@ -27,6 +27,14 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const config = require('./config');
+const packageJson = require('./package.json');
+
+// --- ANTI-THEFT CHECK ---
+if (packageJson.author !== 'Spirit-MD') {
+    console.error(chalk.red.bold('❌ [ERREUR] Code source altéré. L\'auteur dans package.json a été modifié.'));
+    process.exit(1);
+}
+// ------------------------
 
 const commandHandler = require('./handlers/commandHandler');
 const messageHandler = require('./events/messageHandler');
@@ -53,7 +61,16 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
     if (!fs.existsSync(sessionsDir)) fs.mkdirSync(sessionsDir, { recursive: true });
     if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder, { recursive: true });
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+    let state, saveCreds;
+    try {
+        ({ state, saveCreds } = await useMultiFileAuthState(sessionFolder));
+    } catch (error) {
+        console.error(chalk.red(`⚠️ Session corrompue détectée pour [${sessionId}]: ${error.message}. Suppression et recréation...`));
+        fs.rmSync(sessionFolder, { recursive: true, force: true });
+        fs.mkdirSync(sessionFolder, { recursive: true });
+        ({ state, saveCreds } = await useMultiFileAuthState(sessionFolder));
+    }
+
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -116,15 +133,21 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const reason = lastDisconnect?.error?.message || '';
             const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+            const isBadSession = statusCode === DisconnectReason.badSession || statusCode === 500;
             const isConflict = reason.toLowerCase().includes('conflict') || statusCode === 440;
 
             console.log(chalk.red(`❌ Connexion fermée [${sessionId}]. Raison :`), reason || statusCode);
 
-            if (isLoggedOut) {
-                console.log(chalk.red(`⚠️ Déconnecté (Logged Out) [${sessionId}]. Suppression de la session.`));
+            if (isLoggedOut || isBadSession) {
+                console.log(chalk.red(`⚠️ Déconnecté ou Session Corrompue [${sessionId}]. Suppression de la session.`));
                 if (fs.existsSync(sessionFolder)) fs.rmSync(sessionFolder, { recursive: true, force: true });
                 global.activeSessions.delete(sessionId);
                 reconnectingSet.delete(sessionId);
+                
+                // Si c'est le maître, on redémarre l'instance vierge pour regénérer un code
+                if (isMaster) {
+                    setTimeout(() => startBot(sessionId, true, requestNumber), 3000);
+                }
             } else if (!reconnectingSet.has(sessionId)) {
                 // Utilise reconnectingSet pour éviter les doubles reconnexions
                 reconnectingSet.add(sessionId);
@@ -144,10 +167,19 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
 
             if (isMaster) {
                 const pendingUpdateJid = await db.getVar('UPDATE_PENDING', '');
+                const updateMsg = await db.getVar('UPDATE_MSG', '');
+                
                 if (pendingUpdateJid) {
                     try {
-                        await sock.sendMessage(pendingUpdateJid, { text: `_✅ Redémarrage réussi ! Le bot est à jour et opérationnel._` });
+                        let textMsg = `✨ *MISE À JOUR TERMINÉE AVEC SUCCÈS* ✨\n\n`;
+                        textMsg += `_Le système a redémarré et la mise à jour a été effectuée correctement._\n\n`;
+                        textMsg += `🛠️ *Les différents correctifs et nouveautés suivants ont été appliqués :*\n`;
+                        textMsg += `> ${updateMsg || "Améliorations de maintenance globales."}\n\n`;
+                        textMsg += `~ _with love Fabrice_ ❤️`;
+                        
+                        await sock.sendMessage(pendingUpdateJid, { text: textMsg });
                         await db.setVar('UPDATE_PENDING', '');
+                        await db.setVar('UPDATE_MSG', '');
                     } catch (e) {}
                 }
             } else if (!sock.notifiedFirstTime) {
@@ -155,8 +187,17 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
                 try {
                     const masterSock = global.activeSessions.get('master');
                     if (masterSock && sock.customOwner) {
+                        const updateMsg = await db.getVar('UPDATE_MSG', '');
+                        let textMsg = `✨ *BOT CONNECTÉ & PRÊT* ✨\n\n`;
+                        textMsg += `_Votre session a été déployée avec succès. Le système est totalement opérationnel !_`;
+                        if (updateMsg) {
+                            textMsg += `\n\n🛠️ *La dernière mise à jour globale incluait les correctifs suivants :*\n`;
+                            textMsg += `> ${updateMsg}`;
+                        }
+                        textMsg += `\n\n~ _with love Fabrice_ ❤️`;
+                        
                         await masterSock.sendMessage(`${sock.customOwner}@s.whatsapp.net`, {
-                            text: `✅ *BOT DÉPLOYÉ AVEC SUCCÈS*\n\n_Votre bot a été lancé et connecté avec succès. Il est désormais prêt à l'emploi !_`
+                            text: textMsg
                         });
                     }
                 } catch (e) {}
@@ -167,7 +208,11 @@ async function startBot(sessionId = 'master', isMaster = false, requestNumber = 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         for (const msg of messages) {
-            await messageHandler(sock, msg, messageCache);
+            try {
+                await messageHandler(sock, msg, messageCache);
+            } catch (err) {
+                console.error(chalk.red(`[MESSAGE HANDLER ERROR]`), err.message);
+            }
         }
     });
 

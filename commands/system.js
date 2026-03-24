@@ -261,14 +261,19 @@ module.exports = [
 
             if (action === 'apply' || action === 'now') {
                 await reply(`_⏳ Synchronisation pure et dure avec GitHub..._`);
-                exec('git fetch origin main && git reset --hard origin/main', async (error, stdout, stderr) => {
-                    const output = stdout ? stdout.trim() : (stderr ? stderr.trim() : '');
-                    if (error) {
-                        return await reply(`*❌ ERREUR LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
-                    }
-                    await reply(`*✅ MISE À JOUR TERMINÉE*\n_Le système va redémarrer pour appliquer les changements._`);
-                    await db.setVar('UPDATE_PENDING', ctx.from);
-                    setTimeout(() => process.exit(0), 1000);
+                exec('git fetch origin main && git log -1 --pretty=%B origin/main', async (err1, stdout1) => {
+                    const commitMsg = stdout1 ? stdout1.trim() : 'Mise à jour sans détails.';
+                    await db.setVar('UPDATE_MSG', commitMsg);
+                    
+                    exec('git reset --hard origin/main', async (error, stdout, stderr) => {
+                        const output = stdout ? stdout.trim() : (stderr ? stderr.trim() : '');
+                        if (error) {
+                            return await reply(`*❌ ERREUR LORS DE LA MISE À JOUR*\n\n\`\`\`${output}\`\`\``);
+                        }
+                        await reply(`*✅ MISE À JOUR TERMINÉE*\n_Le système va redémarrer pour appliquer les changements._`);
+                        await db.setVar('UPDATE_PENDING', ctx.from);
+                        setTimeout(() => process.exit(0), 1000);
+                    });
                 });
                 return;
             }

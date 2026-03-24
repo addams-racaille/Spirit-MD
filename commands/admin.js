@@ -137,10 +137,31 @@ module.exports = [
         usage: '.except add/remove/list <jid>',
         ownerOnly: true,
         execute: async (ctx) => {
-            const { q, reply } = ctx;
+            const { q, reply, msg, from } = ctx;
             const args = q.trim().split(/ +/);
             const action = args[0]?.toLowerCase();
-            const target = args[1];
+            let target = args.slice(1).join(' '); // Prends le reste comme target s'il y en a
+
+            const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
+
+            // Détection intelligente de la cible
+            if (mentionedJids.length > 0) {
+                target = mentionedJids[0]; // L'utilisateur mentionné
+            } else if (quotedParticipant) {
+                target = quotedParticipant; // L'auteur du message cité
+            } else if (action && action !== 'list' && (!target || ['here', 'groupe', 'ici', 'group'].includes(target.toLowerCase()))) {
+                target = from; // Le chat/groupe actuel
+            } else if (target && !target.includes('@')) {
+                target = target.replace(/[^\d-]/g, '');
+                if (target.length > 0) {
+                    if (target.includes('-')) {
+                        target = `${target}@g.us`;
+                    } else {
+                        target = `${target}@s.whatsapp.net`;
+                    }
+                }
+            }
 
             if (!action || (action !== 'list' && !target)) {
                 const p = ctx.currentPrefix || '.';
@@ -164,8 +185,8 @@ module.exports = [
                 return await reply(msgText);
             }
 
-            if (!target.includes('@')) {
-                return await reply(`_Format invalide. L'ID doit contenir @s.whatsapp.net ou @g.us_`);
+            if (!target || !target.includes('@')) {
+                return await reply(`_Format invalide. Cible introuvable._`);
             }
 
             if (action === 'add') {

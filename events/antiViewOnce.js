@@ -3,23 +3,22 @@ const pino = require('pino');
 const config = require('../config');
 const db = require('../db');
 
-// Logger silencieux pour éviter le spam de Baileys lors du download
 const silentLogger = pino({ level: 'silent' });
 
 module.exports = async (sock, msg) => {
     try {
         const sessionId = sock.customSessionId || 'master';
+
+        // ✅ Checks rapides en premier
         if (!msg.message) return;
+        if (msg.key.fromMe) return;  // ← remonté ici
 
-        const isViewOnce =
-            msg.message.viewOnceMessage ||
-            msg.message.viewOnceMessageV2 ||
-            msg.message.viewOnceMessageV2Extension;
+        const viewOnceContent =
+            msg.message.viewOnceMessage?.message ||
+            msg.message.viewOnceMessageV2?.message ||
+            msg.message.viewOnceMessageV2Extension?.message;
 
-        if (!isViewOnce) return;
-
-        // Ignorer les messages envoyés par le bot lui-même
-        if (msg.key.fromMe) return;
+        if (!viewOnceContent) return;
 
         const antiVvStatus = await db.getSessionVar(sessionId, 'ANTI_VV', 'off');
         if (antiVvStatus === 'off') return;
@@ -33,24 +32,28 @@ module.exports = async (sock, msg) => {
             if (customJid) targetJid = customJid;
         }
 
-        const viewOnceContent = isViewOnce.message;
-        if (!viewOnceContent) return;
-
-        const mediaType = Object.keys(viewOnceContent)[0]; // imageMessage | videoMessage | audioMessage
+        const mediaType = Object.keys(viewOnceContent)[0];
         if (!['imageMessage', 'videoMessage', 'audioMessage'].includes(mediaType)) return;
 
-        // Faux message pointant directement sur le média
-        const fakeMsg = { key: msg.key, message: viewOnceContent };
+        // ✅ fakeMsg avec viewOnceContent direct (pas wrappé)
+        const fakeMsg = {
+            key: msg.key,
+            message: viewOnceContent
+        };
 
         const buffer = await downloadMediaMessage(
             fakeMsg,
             'buffer',
             {},
-            { logger: silentLogger, reuploadRequest: sock.updateMediaMessage }
+            {
+                logger: silentLogger,
+                reuploadRequest: sock.updateMediaMessage.bind(sock)
+            }
         );
 
         if (!buffer || buffer.length === 0) return;
 
+        // ✅ sender robuste
         const sender = msg.key.participant || msg.key.remoteJid;
         const isGroup = msg.key.remoteJid.endsWith('@g.us');
 
@@ -66,11 +69,14 @@ module.exports = async (sock, msg) => {
         } else if (mediaType === 'videoMessage') {
             await sock.sendMessage(targetJid, { video: buffer, caption, mentions: [sender] });
         } else if (mediaType === 'audioMessage') {
-            await sock.sendMessage(targetJid, { audio: buffer, mimetype: 'audio/mp4', ptt: true });
+            await sock.sendMessage(targetJid, {
+                audio: buffer,
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: true
+            });
         }
 
     } catch (e) {
-        // Silencieux — les VV expirés lancent une erreur non critique
         if (!e.message?.includes('404') && !e.message?.includes('not found')) {
             console.error('Anti-VV Error:', e.message);
         }
